@@ -123,7 +123,7 @@ export interface ReprintIn { reason: string }
 export interface PairingCodeOut { code: string; expires_at: string }
 export interface AgentOut {
   id: string; name: string; hostname: string; version: string; status: "active" | "revoked"; online: boolean;
-  last_seen_at: string | null; created_at: string;
+  last_seen_at: string | null; created_at: string; update_available: boolean; latest_version: string;
 }
 export interface PrinterOut {
   id: string; agent_id: string; name: string; is_default: boolean; enabled: boolean; status: "online" | "offline" | "error";
@@ -142,7 +142,9 @@ export interface PrintDirectIn { printer_id: string | null; dry_check: boolean }
 export interface PrintCheckLine { line_index: number; filename: string | null; printer_id: string | null; printer_name: string | null; problems: string[]; warnings: string[] }
 export interface PrintCheckOut { ok: boolean; problems: string[]; lines: PrintCheckLine[]; jobs_created: number }
 export interface OnboardingStep { key: string; label: string; done: boolean; auto: boolean; link: string }
-export interface AgentDownloadOut { available: boolean; url: string; version: string }
+export interface AgentDownloadOut { available: boolean; url: string; version: string; notes: string }
+export interface AgentReleaseIn { url: string; version: string; notes: string }
+export interface AgentReleaseOut extends AgentReleaseIn { updated_at: string | null }
 
 export interface AlertOut {
   kind: "agent_offline" | "printer_offline" | "job_failed" | "low_paper"; message: string; since: string;

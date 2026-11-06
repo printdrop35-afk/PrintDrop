@@ -8,6 +8,7 @@ from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from lib.agent_release import get_release, is_outdated
 from lib.authz import Principal, audit, now_utc, require_tenant, tenant_repo
 from lib.db import db
 from lib.notify import twilio_configured
@@ -42,7 +43,9 @@ async def list_agents(shop_id: str, p: Principal = Depends(require_tenant("devic
     repo = tenant_repo(p)
     await get_shop_or_404(repo, shop_id)
     agents = await repo.find("agents", {"shop_id": shop_id}, sort=[("created_at", -1)])
-    return [AgentOut(**a, online=a["status"] == "active" and is_online(a.get("last_seen_at"))) for a in agents]
+    latest = (await get_release())["version"]
+    return [AgentOut(**a, online=a["status"] == "active" and is_online(a.get("last_seen_at")), latest_version=latest,
+                     update_available=a["status"] == "active" and is_outdated(a.get("version", ""), latest)) for a in agents]
 
 
 @router.post("/agents/{agent_id}/revoke", response_model=AgentOut)

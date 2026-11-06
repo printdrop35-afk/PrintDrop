@@ -81,3 +81,11 @@ backend/tests/test_stage1.py — auth, pricing, upload validation, token binding
 - Word .docx upload → LibreOffice PDF (preview only; production lacks soffice → French error).
 - Agent v0.2 (agent/printdrop_agent.py): tkinter pairing window, --background autostart, DPAPI key, private tmp cleanup, spool monitoring; --dry-run = SIMULATION. Installer: agent/installer/printdrop.iss + .github/workflows/windows-agent.yml.
 - Tests: backend/tests/test_printers.py (uses a freshly registered org for isolation).
+
+## Agent release (installer link, version, update notices)
+- db.platform_settings {id:"agent_release", url, version, notes, updated_at}; fallback env AGENT_DOWNLOAD_URL / AGENT_VERSION.
+- GET/PUT /api/admin/agent-release (super-admin; url must be https and end in .exe, or "" = download off; version x.y.z). Audited as platform.agent_release.
+- GET /api/agent-download (tenant) → {available,url,version,notes}; Devices page « Télécharger l'agent » button.
+- AgentOut.update_available / latest_version: active agent with readable version older than latest → notice + badge on Imprimantes page.
+- GitHub workflow signs PrintDrop.exe + installer with signtool when repo secrets WINDOWS_CERT_PFX_BASE64 / WINDOWS_CERT_PASSWORD exist; otherwise unsigned build + warning. Publishes Release agent-v<version> with stable PrintDrop-Setup.exe.
+- Tests: backend/tests/test_agent_release.py.

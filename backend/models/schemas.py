@@ -460,6 +460,8 @@ class AgentOut(BaseModel):
     online: bool
     last_seen_at: datetime | None
     created_at: datetime
+    update_available: bool = False
+    latest_version: str = ""
 
 
 class PrinterCapabilities(BaseModel):
@@ -634,6 +636,20 @@ class AgentDownloadOut(BaseModel):
     available: bool
     url: str
     version: str
+    notes: str = ""
+
+
+class AgentReleaseIn(BaseModel):
+    url: str = Field(default="", max_length=500)  # "" = download disabled
+    version: str = Field(pattern=r"^\d+\.\d+\.\d+$")
+    notes: str = Field(default="", max_length=500)
+
+
+class AgentReleaseOut(BaseModel):
+    url: str
+    version: str
+    notes: str
+    updated_at: datetime | None
 
 
 class AgentJobOut(BaseModel):

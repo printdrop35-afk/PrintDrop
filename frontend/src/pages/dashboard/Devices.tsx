@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Download, KeyRound, Monitor, Printer, ShieldOff, Star, TriangleAlert } from "lucide-react";
+import { ArrowUpCircle, Download, KeyRound, Monitor, Printer, ShieldOff, Star, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useDashboard } from "@/hooks/useDashboard";
@@ -9,7 +9,7 @@ import { apiGet, apiPatch, apiPost, errorMessage } from "@/lib/api";
 import { formatDateTime } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { PrinterManager } from "@/components/PrinterManager";
-import type { AgentOut, NotificationStatusOut, PairingCodeOut, PrinterOut, PrinterUpdateIn } from "@/lib/types";
+import type { AgentDownloadOut, AgentOut, NotificationStatusOut, PairingCodeOut, PrinterOut, PrinterUpdateIn } from "@/lib/types";
 
 export default function Devices() {
   const { shop, can } = useDashboard();
@@ -19,6 +19,7 @@ export default function Devices() {
 
   const agents = useQuery({ queryKey: ["agents", shop.id], queryFn: () => apiGet<AgentOut[]>(`/shops/${shop.id}/agents`), refetchInterval: 5000 });
   const printers = useQuery({ queryKey: ["printers", shop.id], queryFn: () => apiGet<PrinterOut[]>(`/shops/${shop.id}/printers`), refetchInterval: 5000 });
+  const dl = useQuery({ queryKey: ["agent-download"], queryFn: () => apiGet<AgentDownloadOut>("/agent-download") });
   const notif = useQuery({ queryKey: ["notif-status"], queryFn: () => apiGet<NotificationStatusOut>("/notifications/status") });
 
   const code = useMutation({
@@ -38,6 +39,8 @@ export default function Devices() {
   });
 
   const agentList = agents.isError ? [] : agents.data ?? [];
+  const outdated = agentList.filter((a) => a.update_available);
+  const release = dl.isError ? undefined : dl.data;
   const printerList = printers.isError ? [] : printers.data ?? [];
   const n = notif.isError ? undefined : notif.data;
 
@@ -54,6 +57,24 @@ export default function Devices() {
 
       <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
         <div className="space-y-6">
+          {outdated.length > 0 && (
+            <section className="flex flex-wrap items-start gap-3 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950" data-testid="agent-update-notice">
+              <ArrowUpCircle className="mt-0.5 size-5 shrink-0 text-azure" />
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold">Nouvelle version de l'agent disponible : v{outdated[0].latest_version}</p>
+                <p className="mt-0.5 text-xs">
+                  {outdated.map((a) => `${a.name} (v${a.version})`).join(", ")} {outdated.length > 1 ? "utilisent" : "utilise"} une version plus ancienne.
+                  Téléchargez l'installateur et lancez-le sur le PC du comptoir : l'appairage et les imprimantes sont conservés.
+                </p>
+                {release?.notes && <p className="mt-1 text-xs text-sky-800" data-testid="agent-update-notes">Nouveautés : {release.notes}</p>}
+              </div>
+              {release?.available && (
+                <a href={release.url} className="inline-flex items-center gap-1.5 rounded-lg bg-azure px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-azure/90" data-testid="agent-update-download">
+                  <Download className="size-3.5" /> Mettre à jour
+                </a>
+              )}
+            </section>
+          )}
           <section className="rounded-2xl border bg-card">
             <div className="flex items-center justify-between border-b p-5">
               <h2 className="text-lg font-semibold text-ink">Postes associés</h2>
@@ -66,7 +87,8 @@ export default function Devices() {
                   <li key={a.id} className="flex flex-wrap items-center gap-3 p-4" data-testid={`agent-row-${a.id}`}>
                     <Monitor className="size-5 text-slate-400" />
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium text-ink">{a.name} <span className="text-xs text-muted-foreground">{a.hostname} · v{a.version || "?"}</span></p>
+                      <p className="font-medium text-ink">{a.name} <span className="text-xs text-muted-foreground">{a.hostname} · v{a.version || "?"}</span>
+                        {a.update_available && <span className="ml-2 inline-block whitespace-nowrap rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-800" data-testid={`agent-update-badge-${a.id}`}>Mise à jour v{a.latest_version}</span>}</p>
                       <p className="text-xs text-muted-foreground">Dernier contact : {a.last_seen_at ? formatDateTime(a.last_seen_at) : "jamais"}</p>
                     </div>
                     <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold",
@@ -115,6 +137,13 @@ export default function Devices() {
               <li>Ouvrir PrintDrop et saisir le code d'appairage</li>
               <li>Ajouter les imprimantes ci-dessous (USB ou Wi-Fi / Réseau)</li>
             </ol>
+            {release?.available ? (
+              <a href={release.url} className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-azure px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-azure/90" data-testid="devices-download-agent">
+                <Download className="size-4" /> Télécharger l'agent (v{release.version})
+              </a>
+            ) : (
+              <p className="mt-3 rounded-lg bg-slate-50 p-2 text-xs text-muted-foreground" data-testid="devices-download-unavailable">Le téléchargement sera disponible dès que l'installateur aura été publié par PrintDrop.</p>
+            )}
             <p className="mt-2 text-xs text-muted-foreground">Guide complet : <span className="font-mono">agent/README.md</span></p>
           </section>
           <section className="rounded-2xl border bg-card p-5 text-sm" data-testid="notification-config">

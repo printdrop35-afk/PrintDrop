@@ -97,3 +97,16 @@ copiés dans `C:\ProgramData\PrintDrop\dryrun_output`. **Ne jamais utiliser en p
    (le dépôt doit être **public** pour que les boutiques puissent le télécharger sans compte GitHub).
 4. Communiquez ce lien : il est enregistré dans `AGENT_DOWNLOAD_URL` et le bouton « Télécharger l'agent » s'active.
 Pour une nouvelle version : modifier `AGENT_VERSION` dans le workflow puis repousser.
+
+## Signer l'installateur (supprime l'avertissement Windows)
+1. Achetez un certificat de signature de code (OV ou EV) au nom de votre société, au format `.pfx`.
+   Un certificat OV réduit l'avertissement SmartScreen au fil des téléchargements ; un EV le supprime immédiatement.
+   Les certificats EV délivrés sur clé matérielle (USB/HSM) ne sont pas exportables en `.pfx` : il faut alors un service de signature cloud (ex. Microsoft Trusted Signing).
+2. Sur GitHub : **Settings → Secrets and variables → Actions → New repository secret**
+   - `WINDOWS_CERT_PFX_BASE64` : le fichier .pfx encodé en base64 (PowerShell : `[Convert]::ToBase64String([IO.File]::ReadAllBytes("cert.pfx"))`)
+   - `WINDOWS_CERT_PASSWORD` : le mot de passe du .pfx
+3. Relancez le workflow : `PrintDrop.exe` et l'installateur sont signés (horodatage DigiCert) puis vérifiés. Sans ces secrets, la compilation continue sans signature et affiche un avertissement.
+
+## Publier une mise à jour
+1. Augmentez `AGENT_VERSION` dans le workflow (et `AGENT_VERSION` dans `printdrop_agent.py`), poussez sur GitHub.
+2. Dans le **Super-admin → Agent Windows**, saisissez la nouvelle version (et le lien si besoin) : les boutiques dont l'agent est plus ancien voient un avis « Nouvelle version disponible » sur la page Imprimantes.

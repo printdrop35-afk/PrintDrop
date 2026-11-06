@@ -4,12 +4,12 @@
 Nothing here invents hardware: printers only exist once an agent reports them, discovery results
 come verbatim from the agent, and every check uses server-side state."""
 
-import os
 import uuid
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from lib.agent_release import get_release
 from lib.authz import Principal, audit, now_utc, require_tenant, tenant_repo
 from lib.db import db
 from lib.printing import ACTIVE_JOB_STATUSES, check_printer, enqueue_initial_jobs, is_online, pick_printer, shop_printers
@@ -251,5 +251,5 @@ async def onboarding_mark(step: str, done: bool = True, p: Principal = Depends(r
 
 @router.get("/agent-download", response_model=AgentDownloadOut)
 async def agent_download(_: Principal = Depends(require_tenant("devices:read"))):
-    url = os.environ.get("AGENT_DOWNLOAD_URL", "")
-    return AgentDownloadOut(available=bool(url), url=url, version=os.environ.get("AGENT_VERSION", "0.2.0"))
+    r = await get_release()
+    return AgentDownloadOut(available=bool(r["url"]), url=r["url"], version=r["version"], notes=r["notes"])

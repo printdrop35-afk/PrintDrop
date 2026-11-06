@@ -3,10 +3,13 @@ suspend/reactivate or change plan — it has no access to tenant documents or cu
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from lib.authz import Principal, audit, require_platform
+from urllib.parse import urlparse
+
+from lib.agent_release import RELEASE_ID, get_release
+from lib.authz import Principal, audit, now_utc, require_platform
 from lib.billing import subscription_view
 from lib.db import db
-from models.schemas import AdminOrgOut, AdminOrgUpdateIn, AdminStatsOut, AuditOut
+from models.schemas import AdminOrgOut, AdminOrgUpdateIn, AdminStatsOut, AgentReleaseIn, AgentReleaseOut, AuditOut
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -68,3 +71,24 @@ async def platform_audit(_: Principal = Depends(require_platform("platform:read"
     return await db.audit_logs.find(
         {"action": {"$regex": r"^(platform\.|org\.register|authz\.denied|auth\.login_failed)"}}, {"_id": 0}
     ).sort("at", -1).to_list(200)
+
+
+@router.get("/agent-release", response_model=AgentReleaseOut)
+async def agent_release(_: Principal = Depends(require_platform("platform:read"))):
+    return await get_release()
+
+
+@router.put("/agent-release", response_model=AgentReleaseOut)
+async def set_agent_release(body: AgentReleaseIn, p: Principal = Depends(require_platform("platform:manage"))):
+    url = body.url.strip()
+    if url:
+        u = urlparse(url)
+        if u.scheme != "https" or not u.netloc:
+            raise HTTPException(status_code=422, detail="Le lien doit commencer par https://")
+        if not u.path.lower().endswith(".exe"):
+            raise HTTPException(status_code=422, detail="Le lien doit pointer directement vers le fichier .exe de l'installateur")
+    doc = {"id": RELEASE_ID, "url": url, "version": body.version, "notes": body.notes.strip(), "updated_at": now_utc()}
+    await db.platform_settings.update_one({"id": RELEASE_ID}, {"$set": doc}, upsert=True)
+    await audit("platform.agent_release", principal=p, resource_type="agent_release",
+                resource_id=RELEASE_ID, details={"url": url, "version": body.version})
+    return await get_release()

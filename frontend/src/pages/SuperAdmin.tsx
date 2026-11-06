@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Logo } from "@/components/Logo";
 import { AdminBilling, SubscriptionCell } from "@/components/AdminBilling";
+import { AgentReleaseAdmin } from "@/components/AgentReleaseAdmin";
 import { useMe } from "@/hooks/useMe";
 import { apiGet, apiPatch, errorMessage } from "@/lib/api";
 import { endSession } from "@/lib/session";
@@ -98,6 +99,7 @@ export default function SuperAdmin() {
         </section>
 
         <AdminBilling />
+        <AgentReleaseAdmin />
 
         <section className="rounded-2xl border bg-card p-5">
           <h2 className="text-lg font-semibold text-ink">Journal plateforme</h2>
