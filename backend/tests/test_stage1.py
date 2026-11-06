@@ -112,12 +112,12 @@ def test_server_quote_bw_and_duplex(client):
     r = client.post(f"/public/shops/{BASTILLE}/quote", json={"items": [
         {**base, "options": {"paper_size": "A4", "color": "bw", "duplex": False, "copies": 2, "page_range": ""}}]})
     assert r.status_code == 200
-    assert r.json()["total_cents"] == 3 * 2 * 15  # 90
+    assert r.json()["total_cents"] == 3 * 2 * 10  # 60 (example price A4 N&B 0,10 €)
     r = client.post(f"/public/shops/{BASTILLE}/quote", json={"items": [
         {**base, "options": {"paper_size": "A4", "color": "color", "duplex": True, "copies": 1, "page_range": "1-2"}}],
         "services": {"scan_pages": 2}})
     body = r.json()
-    assert body["total_cents"] == round(2 * 60 * 0.9) + 2 * 20
+    assert body["total_cents"] == round(2 * 50 * 0.9) + 2 * 20  # A4 couleur 0,50 €
     assert body["lines"][0]["sheets"] == 1
 
 
@@ -137,7 +137,7 @@ def test_client_supplied_price_ignored(client):
         "shop_id": "other",
     })
     assert r.status_code == 200
-    assert r.json()["total_cents"] == 15 and r.json()["payment_status"] == "unpaid"
+    assert r.json()["total_cents"] == 10 and r.json()["payment_status"] == "unpaid"
 
 
 # ---------- documents ----------

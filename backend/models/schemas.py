@@ -18,6 +18,41 @@ TenantRole = Literal["owner", "manager", "operator"]
 class ColorPrice(BaseModel):
     bw: int = Field(ge=0, le=100_00)
     color: int = Field(ge=0, le=100_00)
+    active: bool = True
+
+
+class ServiceItem(BaseModel):
+    id: str = Field(default="", max_length=32)
+    name: str = Field(min_length=2, max_length=60)
+    category: Literal["typing", "binding", "lamination", "custom"]
+    unit: Literal["page", "unit", "document"]
+    price_cents: int = Field(ge=0, le=1000_00)
+    price_from: bool = False
+    description: str = Field(default="", max_length=160)
+    active: bool = True
+
+
+class PricingRule(BaseModel):
+    id: str = Field(default="", max_length=32)
+    name: str = Field(min_length=2, max_length=60)
+    min_pages: int = Field(ge=1, le=100_000)
+    discount_pct: int = Field(ge=1, le=90)
+    active: bool = True
+
+
+class Discount(BaseModel):
+    id: str = Field(default="", max_length=32)
+    name: str = Field(min_length=2, max_length=60)
+    code: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{3,20}$")
+    kind: Literal["percent", "fixed"]
+    value: int = Field(ge=1, le=1000_00)
+    min_order_cents: int = Field(default=0, ge=0, le=10_000_00)
+    active: bool = True
+
+    @field_validator("code")
+    @classmethod
+    def upper(cls, v: str | None) -> str | None:
+        return v.upper() if v else None
 
 
 class Pricing(BaseModel):
@@ -25,6 +60,21 @@ class Pricing(BaseModel):
     duplex_discount_pct: int = Field(ge=0, le=50)
     photocopy: ColorPrice
     scan_cents: int = Field(ge=0, le=100_00)
+    min_order_cents: int = Field(default=0, ge=0, le=1000_00)
+    services: list[ServiceItem] = Field(default_factory=list, max_length=50)
+    rules: list[PricingRule] = Field(default_factory=list, max_length=20)
+    discounts: list[Discount] = Field(default_factory=list, max_length=20)
+
+    @field_validator("discounts")
+    @classmethod
+    def check_discounts(cls, v: list[Discount]) -> list[Discount]:
+        codes = [d.code for d in v if d.code]
+        if len(codes) != len(set(codes)):
+            raise ValueError("Chaque code promo doit être unique")
+        for d in v:
+            if d.kind == "percent" and d.value > 90:
+                raise ValueError(f"{d.name} : remise en % limitée à 90 %")
+        return v
 
     @field_validator("print")
     @classmethod
@@ -55,11 +105,23 @@ class UserOut(BaseModel):
     name: str
 
 
+class SubscriptionOut(BaseModel):
+    plan_code: str
+    plan_name: str
+    period: Literal["monthly", "yearly"]
+    status: Literal["trialing", "active", "past_due", "expired", "canceled"]
+    trial_ends_at: datetime | None = None
+    current_period_end: datetime | None = None
+    granted_by_admin: bool = False
+    days_left: int | None = None
+
+
 class OrgOut(BaseModel):
     id: str
     name: str
     status: str
     plan: str
+    subscription: SubscriptionOut | None = None
 
 
 class ShopOut(BaseModel):
@@ -98,13 +160,33 @@ class ShopUpdateIn(BaseModel):
 
 
 # ---------- customer portal ----------
+class AutoDiscountOut(BaseModel):
+    name: str
+    kind: Literal["percent", "fixed"]
+    value: int
+    min_order_cents: int
+
+
+class PublicPricing(BaseModel):
+    print: dict[str, ColorPrice]
+    duplex_discount_pct: int
+    photocopy: ColorPrice
+    scan_cents: int
+    min_order_cents: int
+    services: list[ServiceItem]
+    rules: list[PricingRule]
+    auto_discounts: list[AutoDiscountOut]
+    has_promo_codes: bool
+    vat_rate_bp: int
+
+
 class PublicShopOut(BaseModel):
     slug: str
     name: str
     city: str
     address: str
     accepting_orders: bool
-    pricing: Pricing
+    pricing: PublicPricing
 
 
 class DocumentUploadOut(BaseModel):
@@ -136,9 +218,16 @@ class ServicesIn(BaseModel):
     scan_pages: int = Field(default=0, ge=0, le=1000)
 
 
+class ExtraIn(BaseModel):
+    service_id: str = Field(min_length=1, max_length=32)
+    quantity: int = Field(ge=1, le=1000)
+
+
 class QuoteIn(BaseModel):
     items: list[QuoteItemIn] = Field(default_factory=list, max_length=20)
     services: ServicesIn = Field(default_factory=ServicesIn)
+    extras: list[ExtraIn] = Field(default_factory=list, max_length=30)
+    promo_code: str | None = Field(default=None, max_length=20)
 
 
 class OrderCreateIn(QuoteIn):
@@ -150,7 +239,7 @@ class OrderCreateIn(QuoteIn):
 
 
 class QuoteLine(BaseModel):
-    kind: Literal["print", "photocopy", "scan"]
+    kind: Literal["print", "photocopy", "scan", "service", "discount", "minimum"]
     label: str
     document_id: str | None
     filename: str | None
@@ -164,7 +253,14 @@ class QuoteLine(BaseModel):
 
 class QuoteOut(BaseModel):
     lines: list[QuoteLine]
+    subtotal_cents: int
+    discount_cents: int
     total_cents: int
+    total_ht_cents: int
+    vat_cents: int
+    vat_rate_bp: int
+    promo_code_applied: str | None = None
+    promo_error: str | None = None
     currency: Literal["EUR"] = "EUR"
 
 
@@ -187,6 +283,10 @@ class OrderPublicOut(BaseModel):
     payment_status: PaymentStatus
     lines: list[QuoteLine]
     total_cents: int
+    total_ht_cents: int | None = None
+    vat_cents: int | None = None
+    vat_rate_bp: int | None = None
+    discount_cents: int = 0
     currency: str
     created_at: datetime
     history: list[StatusEvent]
@@ -205,6 +305,10 @@ class OrderOut(BaseModel):
     note: str
     lines: list[QuoteLine]
     total_cents: int
+    total_ht_cents: int | None = None
+    vat_cents: int | None = None
+    vat_rate_bp: int | None = None
+    discount_cents: int = 0
     currency: str
     status: OrderStatus
     payment_status: PaymentStatus
@@ -286,7 +390,8 @@ class AdminOrgOut(BaseModel):
     id: str
     name: str
     status: Literal["active", "suspended"]
-    plan: Literal["essai", "starter", "pro"]
+    plan: str
+    subscription: SubscriptionOut | None = None
     owner_email: str
     shops_count: int
     orders_count: int
@@ -296,7 +401,6 @@ class AdminOrgOut(BaseModel):
 
 class AdminOrgUpdateIn(BaseModel):
     status: Literal["active", "suspended"] | None = None
-    plan: Literal["essai", "starter", "pro"] | None = None
 
 
 # ---------- notifications ----------
@@ -317,7 +421,7 @@ class NotificationStatusOut(BaseModel):
 
 
 # ---------- print agent (dashboard side) ----------
-JobStatus = Literal["queued", "claimed", "printing", "printed", "failed", "cancelled"]
+JobStatus = Literal["queued", "claimed", "spooled", "printing", "printed", "failed", "retry_wait", "cancelled"]
 
 
 class PrintJobOut(BaseModel):
@@ -329,6 +433,7 @@ class PrintJobOut(BaseModel):
     kind: Literal["initial", "reprint"]
     reason: str
     status: JobStatus
+    printer_id: str | None = None
     printer_name: str | None
     error: str | None
     requested_by: str
@@ -357,10 +462,33 @@ class AgentOut(BaseModel):
     created_at: datetime
 
 
+class PrinterCapabilities(BaseModel):
+    paper_sizes: list[str] = Field(default_factory=list, max_length=60)  # as reported by the driver
+    color: bool | None = None  # None = not reported by the driver
+    duplex: bool | None = None
+    orientations: list[str] = Field(default_factory=lambda: ["portrait", "landscape"])
+    qualities: list[str] = Field(default_factory=list, max_length=10)
+
+
+ConnectionType = Literal["usb", "wifi", "ethernet", "network", "virtual", "unknown"]
+
+
 class PrinterOut(BaseModel):
     id: str
     agent_id: str
     name: str
+    display_name: str = ""
+    connection_type: ConnectionType = "unknown"
+    connection_confirmed: bool = False
+    manufacturer: str = ""
+    model: str = ""
+    ip_address: str = ""
+    port_name: str = ""
+    driver_name: str = ""
+    driver_ok: bool | None = None
+    capabilities: PrinterCapabilities = Field(default_factory=PrinterCapabilities)
+    agent_name: str = ""
+    active_jobs: int = 0
     is_default: bool
     enabled: bool
     status: Literal["online", "offline", "error"]
@@ -373,6 +501,8 @@ class PrinterOut(BaseModel):
 class PrinterUpdateIn(BaseModel):
     enabled: bool | None = None
     is_default: bool | None = None
+    display_name: str | None = Field(default=None, max_length=80)
+    connection_type: Literal["usb", "wifi", "ethernet", "network"] | None = None  # owner confirms the real link
 
 
 # ---------- print agent (agent API) ----------
@@ -392,6 +522,14 @@ class AgentPairOut(BaseModel):
 
 class AgentPrinterIn(BaseModel):
     name: str = Field(min_length=1, max_length=200)
+    connection_type: ConnectionType = "unknown"
+    manufacturer: str = Field(default="", max_length=100)
+    model: str = Field(default="", max_length=150)
+    ip_address: str = Field(default="", max_length=100)
+    port_name: str = Field(default="", max_length=200)
+    driver_name: str = Field(default="", max_length=200)
+    driver_ok: bool | None = None
+    capabilities: PrinterCapabilities = Field(default_factory=PrinterCapabilities)
     is_default: bool = False
     status: Literal["online", "offline", "error"] = "online"
     detail: str = Field(default="", max_length=200)
@@ -400,12 +538,102 @@ class AgentPrinterIn(BaseModel):
 
 class AgentHeartbeatIn(BaseModel):
     version: str = Field(default="", max_length=20)
+    drivers: list[str] = Field(default_factory=list, max_length=300)
     printers: list[AgentPrinterIn] = Field(default_factory=list, max_length=50)
+
+
+class AgentCommandOut(BaseModel):
+    id: str
+    type: Literal["discover_usb", "discover_network", "add_network_printer", "test_connection", "test_page"]
+    payload: dict[str, Any]
 
 
 class AgentHeartbeatOut(BaseModel):
     shop_name: str
     poll_seconds: int
+    commands: list[AgentCommandOut] = Field(default_factory=list)
+
+
+class AgentCommandResultIn(BaseModel):
+    ok: bool
+    result: dict[str, Any] = Field(default_factory=dict)
+    error: str = Field(default="", max_length=500)
+
+
+class CommandOut(BaseModel):
+    id: str
+    type: str
+    status: Literal["queued", "sent", "done", "failed", "expired"]
+    result: dict[str, Any]
+    error: str
+    created_at: datetime
+
+
+class DiscoverIn(BaseModel):
+    agent_id: str
+    kind: Literal["usb", "network"]
+
+
+class ManualPrinterIn(BaseModel):
+    agent_id: str
+    name: str = Field(min_length=2, max_length=80)
+    host: str = Field(min_length=3, max_length=100, pattern=r"^[A-Za-z0-9.\-:]+$")
+    protocol: Literal["ipp", "raw9100", "lpd"]
+    port: int | None = Field(default=None, ge=1, le=65535)
+    queue: str = Field(default="", max_length=100, pattern=r"^[A-Za-z0-9_./\-]*$")
+    driver_name: str = Field(default="", max_length=200)
+    connection_type: Literal["wifi", "ethernet", "network"] = "network"
+
+
+class PrinterRule(BaseModel):
+    id: str = Field(default="", max_length=32)
+    service: Literal["print", "any"] = "print"
+    paper_size: str = Field(default="any", max_length=10)
+    color: Literal["bw", "color", "any"] = "any"
+    printer_id: str
+
+
+class PrinterRulesIO(BaseModel):
+    rules: list[PrinterRule] = Field(default_factory=list, max_length=30)
+
+
+class PrintDirectIn(BaseModel):
+    printer_id: str | None = None  # None = automatic assignment (rules, then default)
+    dry_check: bool = False
+
+
+class PrintCheckLine(BaseModel):
+    line_index: int
+    filename: str | None
+    printer_id: str | None
+    printer_name: str | None
+    problems: list[str]
+    warnings: list[str]
+
+
+class PrintCheckOut(BaseModel):
+    ok: bool
+    problems: list[str]
+    lines: list[PrintCheckLine]
+    jobs_created: int = 0
+
+
+class ReassignIn(BaseModel):
+    printer_id: str
+
+
+class OnboardingStep(BaseModel):
+    key: str
+    label: str
+    done: bool
+    auto: bool
+    link: str
+
+
+class AgentDownloadOut(BaseModel):
+    available: bool
+    url: str
+    version: str
 
 
 class AgentJobOut(BaseModel):
@@ -428,7 +656,7 @@ class AgentClaimOut(BaseModel):
 
 class AgentReportIn(BaseModel):
     lease_id: str = Field(min_length=8, max_length=64)
-    status: Literal["printing", "printed", "failed", "requeue"]
+    status: Literal["spooled", "printing", "printed", "failed", "requeue"]
     error: str = Field(default="", max_length=300)
 
 
@@ -514,3 +742,99 @@ class PaperStockIn(BaseModel):
             if n is not None and not 1 <= n <= 1_000_000:
                 raise ValueError(f"Stock {size} : entre 1 et 1 000 000 feuilles")
         return v
+
+
+# ---------- SaaS billing ----------
+BillingPeriod = Literal["monthly", "yearly"]
+
+
+class PlanPrices(BaseModel):
+    monthly: int | None = Field(default=None, ge=0, le=100_000_00)  # HT cents, None = not offered
+    yearly: int | None = Field(default=None, ge=0, le=1_000_000_00)
+
+
+class PlanIn(BaseModel):
+    name: str = Field(min_length=2, max_length=40)
+    description: str = Field(default="", max_length=200)
+    prices_ht: PlanPrices
+    features: list[str] = Field(default_factory=list, max_length=20)
+    max_shops: int = Field(ge=1, le=1000)
+    max_staff: int = Field(ge=1, le=10_000)
+    active: bool = True
+    sort: int = Field(default=0, ge=0, le=100)
+
+    @field_validator("features")
+    @classmethod
+    def clean(cls, v: list[str]) -> list[str]:
+        return [f.strip()[:120] for f in v if f.strip()]
+
+
+class PlanOut(PlanIn):
+    code: str
+    vat_rate_bp: int
+    prices_ttc: PlanPrices
+
+
+class PlatformSettingsIn(BaseModel):
+    shop_vat_rate_bp: int = Field(ge=0, le=5000)
+    subscription_vat_rate_bp: int = Field(ge=0, le=5000)
+    trial_days: int = Field(ge=0, le=90)
+    grace_days: int = Field(ge=0, le=60)
+    company_name: str = Field(min_length=2, max_length=80)
+    company_address: str = Field(default="", max_length=200)
+    company_siret: str = Field(default="", max_length=20)
+    company_vat_number: str = Field(default="", max_length=20)
+    company_email: str = Field(default="", max_length=120)
+
+
+class PlatformSettingsOut(PlatformSettingsIn):
+    payment_provider: str
+    payment_configured: bool
+    payment_mode: Literal["test", "live", "none"]
+
+
+class CheckoutIn(BaseModel):
+    plan_code: str = Field(min_length=2, max_length=20)
+    period: BillingPeriod
+
+
+class CheckoutOut(BaseModel):
+    invoice_id: str
+    checkout_url: str
+
+
+class InvoiceOut(BaseModel):
+    id: str
+    number: str | None
+    status: Literal["pending", "paid", "failed", "canceled", "expired"]
+    plan_code: str
+    plan_name: str
+    period: BillingPeriod
+    amount_ht_cents: int
+    vat_rate_bp: int
+    vat_cents: int
+    amount_ttc_cents: int
+    provider: str
+    period_start: datetime | None = None
+    period_end: datetime | None = None
+    created_at: datetime
+    paid_at: datetime | None = None
+    buyer_name: str
+    seller: dict[str, str]
+
+
+class BillingOverviewOut(BaseModel):
+    subscription: SubscriptionOut
+    payment_configured: bool
+    payment_mode: Literal["test", "live", "none"]
+    plans: list[PlanOut]
+    invoices: list[InvoiceOut]
+    usage_shops: int
+    usage_staff: int
+
+
+class AdminSubscriptionIn(BaseModel):
+    plan_code: str | None = Field(default=None, max_length=20)
+    period: BillingPeriod | None = None
+    status: Literal["trialing", "active", "canceled"] | None = None
+    period_end: datetime | None = None

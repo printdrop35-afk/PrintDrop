@@ -8,6 +8,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PaymentBadge, StatusBadge } from "@/components/StatusBadge";
 import { AlertsBanner, NotificationsPanel, PrintJobsPanel } from "@/components/OrderExtras";
+import { PrintDirect } from "@/pages/dashboard/PrintQueue";
 import { PaperStockDialog, PaperStrip } from "@/components/PaperStock";
 import { useDashboard } from "@/hooks/useDashboard";
 import { apiGet, apiPost, errorMessage } from "@/lib/api";
@@ -25,7 +26,7 @@ const FILTERS = [
 ];
 
 const NEXT: Record<OrderStatus, { to: OrderStatus; label: string; variant?: "outline" | "destructive" }[]> = {
-  pending: [{ to: "printing", label: "Lancer l'impression" }, { to: "ready", label: "Marquer prête", variant: "outline" }, { to: "cancelled", label: "Annuler", variant: "destructive" }],
+  pending: [{ to: "printing", label: "Marquer en impression (manuel)" }, { to: "ready", label: "Marquer prête", variant: "outline" }, { to: "cancelled", label: "Annuler", variant: "destructive" }],
   printing: [{ to: "ready", label: "Marquer prête" }, { to: "pending", label: "Remettre en attente", variant: "outline" }, { to: "cancelled", label: "Annuler", variant: "destructive" }],
   ready: [{ to: "picked_up", label: "Marquer retirée" }, { to: "printing", label: "Repasser en impression", variant: "outline" }, { to: "cancelled", label: "Annuler", variant: "destructive" }],
   picked_up: [],
@@ -103,16 +104,18 @@ function OrderSheet({ order, onClose }: { order: OrderOut | null; onClose: () =>
                       {l.document_id && can("documents:read") && (
                         <button type="button" onClick={() => openDoc(l.document_id as string)} data-testid={`order-line-${i}-open-doc`}
                           className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold text-azure hover:underline">
-                          <ExternalLink className="size-3.5" /> Ouvrir le document (lien sécurisé 5 min)
+                          <ExternalLink className="size-3.5" /> Télécharger le document (lien sécurisé 5 min)
                         </button>
                       )}
                     </div>
                     <span className="font-mono text-sm">{formatEUR(l.subtotal_cents)}</span>
                   </li>
                 ))}
-                <li className="flex justify-between bg-slate-50 p-3 font-semibold"><span>Total</span><span className="font-mono" data-testid="order-detail-total">{formatEUR(o.total_cents)}</span></li>
+                {o.vat_cents !== null && o.total_ht_cents !== null && <li className="flex justify-between px-3 py-1.5 text-xs text-muted-foreground"><span>HT {formatEUR(o.total_ht_cents)}</span><span>TVA {formatEUR(o.vat_cents)}</span></li>}
+                <li className="flex justify-between bg-slate-50 p-3 font-semibold"><span>Total TTC</span><span className="font-mono" data-testid="order-detail-total">{formatEUR(o.total_cents)}</span></li>
               </ul>
 
+              {can("orders:update") && o.status === "pending" && <PrintDirect order={o} onDone={() => refresh({ ...o, status: "printing" })} />}
               <PrintJobsPanel order={o} canReprint={can("jobs:reprint")} />
               <NotificationsPanel order={o} />
 
@@ -131,7 +134,7 @@ function OrderSheet({ order, onClose }: { order: OrderOut | null; onClose: () =>
                 <div className="space-y-2">
                   <p className="text-xs font-semibold tracking-[0.15em] text-slate-500 uppercase">Statut</p>
                   <div className="flex flex-wrap gap-2">
-                    {NEXT[o.status].map((n) => (
+                    {NEXT[o.status].filter((n) => !(o.status === "pending" && n.to === "printing")).map((n) => (
                       <Button key={n.to} variant={n.variant ?? "default"} disabled={status.isPending} onClick={() => status.mutate(n.to)} data-testid={`order-status-${n.to}-button`}>{n.label}</Button>
                     ))}
                   </div>

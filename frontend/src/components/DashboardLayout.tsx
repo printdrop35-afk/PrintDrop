@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Navigate, NavLink, Outlet } from "react-router-dom";
-import { BarChart3, ClipboardList, Euro, LogOut, Menu, Printer, QrCode, ScrollText, Users, Store, Loader2 } from "lucide-react";
+import { Link, Navigate, NavLink, Outlet } from "react-router-dom";
+import { BarChart3, ClipboardList, CreditCard, ListOrdered, Rocket, Euro, LogOut, Menu, Printer, QrCode, ScrollText, Users, Store, Loader2 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Logo } from "@/components/Logo";
@@ -14,11 +14,14 @@ import type { MeOut } from "@/lib/types";
 
 const NAV: { to: string; key: MessageKey; icon: typeof ClipboardList; perm: string; testId: string }[] = [
   { to: "/dashboard", key: "nav.orders", icon: ClipboardList, perm: "orders:read", testId: "nav-orders" },
+  { to: "/dashboard/demarrage", key: "nav.onboarding", icon: Rocket, perm: "shop:edit", testId: "nav-onboarding" },
+  { to: "/dashboard/file-impression", key: "nav.queue", icon: ListOrdered, perm: "orders:read", testId: "nav-queue" },
   { to: "/dashboard/rapports", key: "nav.reports", icon: BarChart3, perm: "reports:read", testId: "nav-reports" },
   { to: "/dashboard/tarifs", key: "nav.pricing", icon: Euro, perm: "shop:read", testId: "nav-pricing" },
   { to: "/dashboard/boutique", key: "nav.shop", icon: QrCode, perm: "shop:read", testId: "nav-shop" },
   { to: "/dashboard/imprimantes", key: "nav.devices", icon: Printer, perm: "devices:read", testId: "nav-devices" },
   { to: "/dashboard/equipe", key: "nav.team", icon: Users, perm: "staff:read", testId: "nav-team" },
+  { to: "/dashboard/abonnement", key: "nav.billing", icon: CreditCard, perm: "billing:manage", testId: "nav-billing" },
   { to: "/dashboard/journal", key: "nav.audit", icon: ScrollText, perm: "audit:read", testId: "nav-audit" },
 ];
 
@@ -110,9 +113,28 @@ export default function DashboardLayout() {
           </SheetContent>
         </Sheet>
         <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-8 sm:py-8">
+          <SubscriptionBanner me={me} />
           <Outlet context={ctx} />
         </main>
       </div>
+    </div>
+  );
+}
+
+function SubscriptionBanner({ me }: { me: MeOut }) {
+  const sub = me.org?.subscription;
+  if (!sub) return null;
+  const owner = me.permissions.includes("billing:manage");
+  const blocked = sub.status === "expired" || sub.status === "canceled";
+  const soon = sub.status === "trialing" && (sub.days_left ?? 99) <= 5;
+  if (!blocked && !soon && sub.status !== "past_due") return null;
+  const msg = blocked ? "Abonnement inactif : vos boutiques n'acceptent plus de nouvelles commandes."
+    : sub.status === "past_due" ? "Période d'abonnement terminée — réglez la suivante pour éviter l'interruption."
+    : `Essai gratuit : ${sub.days_left} jour(s) restant(s).`;
+  return (
+    <div className={blocked ? "mb-5 flex flex-wrap items-center gap-3 rounded-2xl border border-rose-300 bg-rose-50 p-4 text-sm text-rose-900" : "mb-5 flex flex-wrap items-center gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900"} data-testid="subscription-banner">
+      <span className="flex-1">{msg}</span>
+      {owner ? <Link to="/dashboard/abonnement" className="font-semibold underline" data-testid="subscription-banner-link">Gérer l'abonnement</Link> : <span className="text-xs">Contactez le propriétaire du compte.</span>}
     </div>
   );
 }

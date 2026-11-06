@@ -6,10 +6,14 @@ from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import Response
 
 from lib.authz import ROLE_RANK, Principal, TenantRepo, audit, now_utc, request_origin, require_tenant, tenant_repo
 from lib.notify import enqueue_ready
 from lib.printing import enqueue_initial_jobs
+from lib.billing import enforce_limit
+from lib.platform import shop_vat_bp
+from lib.pricing import PAPER_LABELS, SERVICE_CATEGORIES, UNIT_LABELS, ht_from_ttc, new_id
 from lib.db import db
 from lib.security import hash_password, sign_file_link
 from models.schemas import (
@@ -52,6 +56,7 @@ async def list_shops(p: Principal = Depends(require_tenant("shop:read"))):
 
 @router.post("/shops", response_model=ShopOut)
 async def create_shop(body: ShopCreateIn, p: Principal = Depends(require_tenant("shop:create"))):
+    await enforce_limit(p.org_id or "", "shops")
     repo = tenant_repo(p)
     doc = new_shop_doc(p.org_id or "", body.name.strip(), body.city.strip(), body.address.strip(), await unique_slug(body.name))
     doc = await repo.insert("shops", doc)
@@ -74,9 +79,58 @@ async def update_shop(shop_id: str, body: ShopUpdateIn, p: Principal = Depends(r
 async def update_pricing(shop_id: str, body: Pricing, p: Principal = Depends(require_tenant("pricing:edit"))):
     repo = tenant_repo(p)
     before = await get_shop_or_404(repo, shop_id)
-    await repo.update_one("shops", {"id": shop_id}, {"$set": {"pricing": body.model_dump()}})
+    data = body.model_dump()
+    for coll in ("services", "rules", "discounts"):
+        for item in data[coll]:
+            item["id"] = item["id"] or new_id()  # ids are server-assigned
+    await repo.update_one("shops", {"id": shop_id}, {"$set": {"pricing": data}})
     await audit("pricing.update", principal=p, resource_type="shop", resource_id=shop_id,
                 details={"before": before["pricing"], "after": body.model_dump()})
+    return await get_shop_or_404(repo, shop_id)
+
+
+def _eur(cents: int) -> str:
+    return f"{cents / 100:.2f}".replace(".", ",")
+
+
+@router.get("/shops/{shop_id}/pricing/export")
+async def export_pricing(shop_id: str, p: Principal = Depends(require_tenant("shop:read"))):
+    """Price list as CSV (Excel-friendly: UTF-8 BOM, semicolon separator), TTC and HT."""
+    shop = await get_shop_or_404(tenant_repo(p), shop_id)
+    pr, vat = shop["pricing"], await shop_vat_bp()
+    rows = [["Catégorie", "Prestation", "Unité", "Prix TTC (€)", "Prix HT (€)", "TVA (%)", "Statut"]]
+    status = lambda active: "Actif" if active else "Désactivé"  # noqa: E731
+    for size, c in pr["print"].items():
+        for mode, label in (("bw", "N&B"), ("color", "Couleur")):
+            rows.append(["Impression", f"{PAPER_LABELS[size]} {label} recto", "page", _eur(c[mode]), _eur(ht_from_ttc(c[mode], vat)), f"{vat / 100:g}", status(c.get("active", True))])
+    rows.append(["Impression", f"Remise recto-verso", "%", f"{pr['duplex_discount_pct']}", "", "", "Actif"])
+    for mode, label in (("bw", "N&B"), ("color", "Couleur")):
+        c = pr["photocopy"][mode]
+        rows.append(["Photocopie", f"Photocopie {label}", "page", _eur(c), _eur(ht_from_ttc(c, vat)), f"{vat / 100:g}", status(pr["photocopy"].get("active", True))])
+    rows.append(["Numérisation", "Scan", "page", _eur(pr["scan_cents"]), _eur(ht_from_ttc(pr["scan_cents"], vat)), f"{vat / 100:g}", "Actif"])
+    for svc in pr.get("services", []):
+        price = ("à partir de " if svc.get("price_from") else "") + _eur(svc["price_cents"])
+        rows.append([SERVICE_CATEGORIES[svc["category"]], svc["name"], UNIT_LABELS[svc["unit"]], price, _eur(ht_from_ttc(svc["price_cents"], vat)), f"{vat / 100:g}", status(svc.get("active", True))])
+    for r in pr.get("rules", []):
+        rows.append(["Règle", r["name"], f"dès {r['min_pages']} pages", f"-{r['discount_pct']} %", "", "", status(r.get("active", True))])
+    for d in pr.get("discounts", []):
+        val = f"-{d['value']} %" if d["kind"] == "percent" else f"-{_eur(d['value'])}"
+        rows.append(["Remise", d["name"] + (f" (code {d['code']})" if d.get("code") else " (automatique)"), f"dès {_eur(d.get('min_order_cents', 0))} €", val, "", "", status(d.get("active", True))])
+    rows.append(["Minimum", "Montant minimum de commande", "commande", _eur(pr.get("min_order_cents", 0)), _eur(ht_from_ttc(pr.get("min_order_cents", 0), vat)), f"{vat / 100:g}", "Actif"])
+    csv = "\ufeff" + "\r\n".join(";".join('"' + str(v).replace('"', '""') + '"' for v in row) for row in rows)
+    await audit("pricing.export", principal=p, resource_type="shop", resource_id=shop_id)
+    return Response(csv, media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="tarifs-{shop["slug"]}.csv"'})
+
+
+@router.post("/shops/{shop_id}/pricing/copy-from/{source_id}", response_model=ShopOut)
+async def copy_pricing(shop_id: str, source_id: str, p: Principal = Depends(require_tenant("pricing:edit"))):
+    repo = tenant_repo(p)
+    target = await get_shop_or_404(repo, shop_id)
+    source = await get_shop_or_404(repo, source_id)  # both inside the caller's tenant
+    await repo.update_one("shops", {"id": shop_id}, {"$set": {"pricing": source["pricing"]}})
+    await audit("pricing.copy", principal=p, resource_type="shop", resource_id=shop_id,
+                details={"from": source_id, "before": target["pricing"]})
     return await get_shop_or_404(repo, shop_id)
 
 
@@ -198,6 +252,7 @@ async def list_staff(p: Principal = Depends(require_tenant("staff:read"))):
 
 @router.post("/staff", response_model=StaffOut)
 async def create_staff(body: StaffCreateIn, p: Principal = Depends(require_tenant("staff:manage"))):
+    await enforce_limit(p.org_id or "", "staff")
     if ROLE_RANK[body.role] >= ROLE_RANK[p.tenant_role or "operator"]:
         raise HTTPException(status_code=403, detail="Vous ne pouvez pas attribuer ce rôle")
     email = body.email.lower()

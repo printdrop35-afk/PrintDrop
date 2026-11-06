@@ -8,6 +8,7 @@ import { useDashboard } from "@/hooks/useDashboard";
 import { apiGet, apiPatch, apiPost, errorMessage } from "@/lib/api";
 import { formatDateTime } from "@/i18n";
 import { cn } from "@/lib/utils";
+import { PrinterManager } from "@/components/PrinterManager";
 import type { AgentOut, NotificationStatusOut, PairingCodeOut, PrinterOut, PrinterUpdateIn } from "@/lib/types";
 
 export default function Devices() {
@@ -47,7 +48,7 @@ export default function Devices() {
         <h1 className="mt-1 text-3xl font-bold text-ink">Imprimantes & agent</h1>
         <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
           L'agent local PrintDrop s'installe sur le PC Windows du comptoir et imprime automatiquement les commandes que vous lancez,
-          avec les pilotes de vos imprimantes. Version 0.1 : à valider sur votre matériel avant usage en production.
+          avec les pilotes de vos imprimantes. Version 0.2 : à valider sur votre matériel Windows 10/11 avant usage en production.
         </p>
       </div>
 
@@ -82,37 +83,7 @@ export default function Devices() {
             )}
           </section>
 
-          <section className="rounded-2xl border bg-card">
-            <div className="border-b p-5">
-              <h2 className="text-lg font-semibold text-ink">Imprimantes détectées</h2>
-              <p className="text-xs text-muted-foreground">Remontées par les agents actifs toutes les 5 s. L'imprimante par défaut reçoit les travaux.</p>
-            </div>
-            {printerList.length === 0 ? (
-              <p className="p-6 text-sm text-muted-foreground" data-testid="printers-empty">Aucune imprimante remontée pour l'instant.</p>
-            ) : (
-              <ul className="divide-y" data-testid="printers-list">
-                {printerList.map((p) => (
-                  <li key={p.id} className="flex flex-wrap items-center gap-3 p-4" data-testid={`printer-row-${p.id}`}>
-                    <Printer className={cn("size-5", p.online ? "text-emerald-600" : "text-slate-400")} />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium text-ink">{p.name} {p.is_default && <Star className="inline size-3.5 fill-amber-400 text-amber-400" />}</p>
-                      <p className={cn("text-xs", p.online ? "text-emerald-700" : "text-rose-700")} data-testid={`printer-status-${p.id}`}>
-                        {p.online ? "Prête" : p.status === "error" ? "En erreur" : "Hors ligne"}{p.status_detail ? ` · ${p.status_detail}` : ""} · {p.supports_color ? "Couleur" : "N&B"}
-                      </p>
-                    </div>
-                    {manage && (
-                      <>
-                        <label className="flex items-center gap-2 text-xs">
-                          <Checkbox checked={p.enabled} onCheckedChange={(c: boolean) => updatePrinter.mutate({ id: p.id, body: { enabled: c } })} data-testid={`printer-enabled-${p.id}`} /> Activée
-                        </label>
-                        {!p.is_default && <Button size="sm" variant="outline" onClick={() => updatePrinter.mutate({ id: p.id, body: { is_default: true } })} data-testid={`printer-default-${p.id}`}>Par défaut</Button>}
-                      </>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+          <PrinterManager shopId={shop.id} agents={agents.data ?? []} printers={printerList} manage={manage} />
         </div>
 
         <aside className="space-y-4">
@@ -139,10 +110,10 @@ export default function Devices() {
             <Download className="size-5 text-azure" />
             <h3 className="mt-2 font-semibold text-ink">Installer l'agent Windows</h3>
             <ol className="mt-2 list-decimal space-y-1 pl-5 text-muted-foreground">
-              <li>Python 3.10+ et SumatraPDF sur le PC du comptoir</li>
-              <li>Copier le dossier <span className="font-mono text-xs">agent/</span> du code source PrintDrop</li>
-              <li><span className="font-mono text-xs">pip install -r requirements.txt</span></li>
-              <li>Appairer avec le code ci-dessus, puis installer en service</li>
+              <li>Télécharger l'installateur PrintDrop (compilé par GitHub Actions) ou, à défaut, Python 3.10+ et SumatraPDF</li>
+              <li>Lancer l'installateur : démarrage automatique avec Windows proposé</li>
+              <li>Ouvrir PrintDrop et saisir le code d'appairage</li>
+              <li>Ajouter les imprimantes ci-dessous (USB ou Wi-Fi / Réseau)</li>
             </ol>
             <p className="mt-2 text-xs text-muted-foreground">Guide complet : <span className="font-mono">agent/README.md</span></p>
           </section>

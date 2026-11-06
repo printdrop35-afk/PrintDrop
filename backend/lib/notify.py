@@ -8,7 +8,7 @@ import logging
 import os
 import re
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from html import escape
 from html.parser import HTMLParser
 from urllib.parse import urlparse
@@ -265,3 +265,36 @@ async def process_notification_jobs(limit: int = 20) -> int:
             logger.info("notification %s %s: %s", job["channel"], status, exc)
         done += 1
     return done
+
+
+async def alert_owner(org_id: str, key: str, subject: str, text: str) -> bool:
+    """One e-mail per incident key to the organization owner (printer offline, agent disconnected, print failure)."""
+    from pymongo.errors import DuplicateKeyError
+    try:
+        await db.owner_alerts.insert_one({"key": key, "org_id": org_id, "subject": subject, "at": datetime.now(timezone.utc)})
+    except DuplicateKeyError:
+        return False
+    org = await db.organizations.find_one({"id": org_id}, {"_id": 0, "owner_id": 1, "demo": 1})
+    owner = await db.users.find_one({"id": (org or {}).get("owner_id")}, {"_id": 0, "email": 1}) if org else None
+    if not owner or (org or {}).get("demo") or not os.environ.get("EMERGENT_EMAIL_KEY"):
+        return False  # demo orgs use fictitious addresses: alert stays visible in the dashboard only
+    html = (f'<div style="font-family:Arial,sans-serif;color:#0f172a"><h2 style="color:#e11d48">{subject}</h2>'
+            f'<p>{text}</p><p style="color:#64748b;font-size:12px">PrintDrop — alerte automatique.</p></div>')
+    try:
+        await send_email(to=owner["email"], subject=f"PrintDrop — {subject}", html=html)
+    except Exception as exc:  # alert e-mail failure must never break the agent heartbeat
+        logger.warning("alert_owner %s: %s", key, exc)
+    return True
+
+
+async def check_agents_offline() -> None:
+    """Background job: e-mail the owner once when an active agent stops sending heartbeats."""
+    from datetime import timedelta
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=180)
+    async for ag in db.agents.find({"status": "active", "last_seen_at": {"$lt": cutoff}, "offline_alerted_for": {"$ne": "x"}}, {"_id": 0}):
+        if ag.get("offline_alerted_for") == ag["last_seen_at"].isoformat():
+            continue
+        await db.agents.update_one({"id": ag["id"]}, {"$set": {"offline_alerted_for": ag["last_seen_at"].isoformat()}})
+        await alert_owner(ag["org_id"], f"agent-offline:{ag['id']}:{ag['last_seen_at'].isoformat()}",
+                          f"Agent Windows « {ag['name']} » déconnecté",
+                          "Le PC du comptoir ne répond plus depuis 3 minutes. Les impressions en attente reprendront dès son retour, sans doublon.")

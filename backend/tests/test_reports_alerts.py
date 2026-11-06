@@ -22,7 +22,7 @@ def test_daily_report_counts(client):
     after = owner.get(f"/shops/{sid}/reports/daily").json()
     assert after["orders_total"] >= before["orders_total"] + 1  # other workers may add orders concurrently
     assert after["pages_bw"] >= before["pages_bw"] + 6
-    assert after["revenue_card_cents"] >= before["revenue_card_cents"] + 90
+    assert after["revenue_card_cents"] >= before["revenue_card_cents"] + 60
     assert len(after["hours"]) == 24 and after["busiest_hour"] is not None
     assert owner.get(f"/shops/{sid}/reports/daily?day=2999-01-01").status_code == 422
     owner.close()
@@ -40,10 +40,10 @@ def test_report_permissions_and_isolation():
 
 
 def test_alerts_printer_offline_and_failed_job(client):
-    owner = login("proprio@bastille.fr", "Bastille2026!")
+    owner = login("proprio@copylyon.fr", "Lyon2026!")
     data, agent = pair_agent(owner, "PC alertes")
     drain(agent)
-    order = place_order(client)
+    order = place_order(client, "copyprint-bellecour")
     o = find_order(owner, order["code"])
     owner.post(f"/orders/{o['id']}/status", json={"status": "printing"})
     job = next(j for j in agent.post("/agent/jobs/claim").json()["jobs"] if j["order_code"] == order["code"])

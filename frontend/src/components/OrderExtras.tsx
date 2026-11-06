@@ -49,7 +49,7 @@ export function PrintJobsPanel({ order, canReprint }: { order: OrderOut; canRepr
       <p className="text-xs font-semibold tracking-[0.15em] text-slate-500 uppercase">Impression automatique (agent local)</p>
       {list.length === 0 ? (
         <p className="mt-2 rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900" data-testid="print-jobs-empty">
-          Aucun travail envoyé à l'agent. Les travaux sont créés quand vous cliquez « Lancer l'impression » et qu'un agent Windows est associé à la boutique.
+          Aucun travail envoyé à l'agent. Les travaux sont créés quand vous cliquez « IMPRIMER DIRECTEMENT » et qu'un agent Windows est associé à la boutique.
           Sinon, ouvrez le document et imprimez-le depuis ce poste.
         </p>
       ) : (

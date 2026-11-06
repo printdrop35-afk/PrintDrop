@@ -11,10 +11,11 @@ from pydantic import BaseModel
 from lib.authz import audit, now_utc, request_origin
 from lib.db import db
 from lib.pricing import parse_page_range
+from lib.notify import alert_owner
 from lib.printing import CLAIM_LEASE_SECONDS, PRINT_LEASE_SECONDS, maybe_complete_order
 from lib.security import sha256, sign_file_link
 from models.schemas import (
-    AgentClaimOut, AgentHeartbeatIn, AgentHeartbeatOut, AgentJobOut, AgentPairIn, AgentPairOut, AgentReportIn, AgentReportOut,
+    AgentClaimOut, AgentCommandResultIn, AgentHeartbeatIn, AgentHeartbeatOut, AgentJobOut, AgentPairIn, AgentPairOut, AgentReportIn, AgentReportOut,
 )
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -69,24 +70,47 @@ async def pair(body: AgentPairIn):
 @router.post("/heartbeat", response_model=AgentHeartbeatOut)
 async def heartbeat(body: AgentHeartbeatIn, a: AgentPrincipal = Depends(get_agent)):
     now = now_utc()
-    await db.agents.update_one({"id": a.agent_id}, {"$set": {"last_seen_at": now, "version": body.version}})
+    await db.agents.update_one({"id": a.agent_id}, {"$set": {"last_seen_at": now, "version": body.version, "drivers": body.drivers[:300]}})
+    previous = {p["name"]: p.get("status") for p in await db.printers.find({"org_id": a.org_id, "agent_id": a.agent_id}, {"_id": 0, "name": 1, "status": 1}).to_list(100)}
     has_default = bool(await db.printers.find_one({"org_id": a.org_id, "shop_id": a.shop_id, "is_default": True}, {"_id": 1}))
     seen = []
     for pr in body.printers:
         seen.append(pr.name)
         res = await db.printers.update_one(
             {"org_id": a.org_id, "agent_id": a.agent_id, "name": pr.name},
-            {"$set": {"status": pr.status, "status_detail": pr.detail, "supports_color": pr.supports_color, "last_seen_at": now},
-             "$setOnInsert": {"id": str(uuid.uuid4()), "shop_id": a.shop_id, "enabled": True,
+            {"$set": {"status": pr.status, "status_detail": pr.detail, "supports_color": pr.supports_color, "last_seen_at": now,
+                      "manufacturer": pr.manufacturer, "model": pr.model, "ip_address": pr.ip_address, "port_name": pr.port_name,
+                      "driver_name": pr.driver_name, "driver_ok": pr.driver_ok, "capabilities": pr.capabilities.model_dump(),
+                      "detected_connection": pr.connection_type},
+             "$setOnInsert": {"id": str(uuid.uuid4()), "shop_id": a.shop_id, "enabled": True, "display_name": "",
+                              "connection_type": pr.connection_type, "connection_confirmed": pr.connection_type in ("usb", "virtual"),
                               "is_default": pr.is_default and not has_default}},
             upsert=True,
         )
         if res.upserted_id and pr.is_default:
             has_default = True
+        if previous.get(pr.name) == "online" and pr.status != "online":
+            await alert_owner(a.org_id, f"printer-offline:{a.agent_id}:{pr.name}:{now:%Y%m%d%H}",
+                              f"Imprimante « {pr.name} » {'hors ligne' if pr.status == 'offline' else 'en erreur'}",
+                              f"L'imprimante « {pr.name} » ({a.name}) signale : {pr.detail or pr.status}. Les travaux restent en file ; vous pouvez les réaffecter depuis PrintDrop.")
     await db.printers.update_many({"org_id": a.org_id, "agent_id": a.agent_id, "name": {"$nin": seen}},
                                   {"$set": {"status": "offline", "status_detail": "Non détectée par l'agent"}})
     shop = await db.shops.find_one({"id": a.shop_id}, {"_id": 0, "name": 1})
-    return AgentHeartbeatOut(shop_name=shop["name"] if shop else "", poll_seconds=POLL_SECONDS)
+    cmds = await db.agent_commands.find({"agent_id": a.agent_id, "org_id": a.org_id, "status": "queued"}, {"_id": 0}).to_list(10)
+    if cmds:
+        await db.agent_commands.update_many({"id": {"$in": [c["id"] for c in cmds]}}, {"$set": {"status": "sent", "sent_at": now}})
+    return AgentHeartbeatOut(shop_name=shop["name"] if shop else "", poll_seconds=POLL_SECONDS,
+                             commands=[{"id": c["id"], "type": c["type"], "payload": c["payload"]} for c in cmds])
+
+
+@router.post("/commands/{command_id}/result")
+async def command_result(command_id: str, body: AgentCommandResultIn, a: AgentPrincipal = Depends(get_agent)):
+    res = await db.agent_commands.update_one(
+        {"id": command_id, "agent_id": a.agent_id, "org_id": a.org_id, "status": "sent"},
+        {"$set": {"status": "done" if body.ok else "failed", "result": body.result, "error": body.error, "done_at": now_utc()}})
+    if not res.matched_count:
+        raise HTTPException(status_code=404, detail="Commande inconnue")
+    return {"ok": True}
 
 
 @router.post("/jobs/claim", response_model=AgentClaimOut)
@@ -96,19 +120,25 @@ async def claim(a: AgentPrincipal = Depends(get_agent)):
     ).sort("is_default", -1).to_list(50)
     if not printers:
         return AgentClaimOut(jobs=[], message="Aucune imprimante activée et en ligne sur ce poste")
-    printer = printers[0]["name"]
+    mine = {p["id"]: p["name"] for p in printers}
+    default = printers[0]
     jobs: list[AgentJobOut] = []
     for _ in range(3):
         now = now_utc()
         lease_id = uuid.uuid4().hex
+        claimable = {"$or": [{"status": "queued"}, {"status": "retry_wait", "next_attempt_at": {"$lte": now}}]}
+        # a job assigned to a printer is only taken by the agent that owns it; unassigned jobs go to the default
+        target = {"$or": [{"printer_id": {"$in": list(mine)}}, {"printer_id": None}]}
         job = await db.print_jobs.find_one_and_update(
-            {"org_id": a.org_id, "shop_id": a.shop_id, "status": "queued"},
-            {"$set": {"status": "claimed", "agent_id": a.agent_id, "lease_id": lease_id, "printer_name": printer,
+            {"org_id": a.org_id, "shop_id": a.shop_id, "$and": [claimable, target]},
+            {"$set": {"status": "claimed", "agent_id": a.agent_id, "lease_id": lease_id,
                       "lease_expires_at": now + timedelta(seconds=CLAIM_LEASE_SECONDS), "updated_at": now}},
             sort=[("created_at", 1)], projection={"_id": 0}, return_document=True,
         )
         if not job:
             break
+        printer = mine.get(job.get("printer_id") or "", default["name"])
+        await db.print_jobs.update_one({"id": job["id"]}, {"$set": {"printer_name": printer, "printer_id": job.get("printer_id") or default["id"]}})
         doc = await db.documents.find_one({"id": job["document_id"], "org_id": a.org_id}, {"_id": 0})
         if not doc:
             await db.print_jobs.update_one({"id": job["id"]}, {"$set": {"status": "failed", "error": "Document supprimé"}})
@@ -132,17 +162,23 @@ async def report(job_id: str, body: AgentReportIn, request: Request, a: AgentPri
     if job["agent_id"] != a.agent_id or job["lease_id"] != body.lease_id:
         raise HTTPException(status_code=409, detail="Bail invalide — ce travail n'appartient plus à cet agent")
     now = now_utc()
-    allowed = {"printing": ["claimed"], "printed": ["claimed", "printing"], "failed": ["claimed", "printing"], "requeue": ["claimed"]}
+    # claimed (delivered to agent) -> spooled (accepted by Windows spooler) -> printing -> printed (completed per driver)
+    allowed = {"spooled": ["claimed", "printing"], "printing": ["claimed", "spooled"], "printed": ["claimed", "spooled", "printing"],
+               "failed": ["claimed", "spooled", "printing"], "requeue": ["claimed"]}
     if job["status"] not in allowed[body.status]:
         raise HTTPException(status_code=409, detail=f"Transition impossible : {job['status']} → {body.status}")
-    if body.status == "printing":
-        update = {"status": "printing", "lease_expires_at": now + timedelta(seconds=PRINT_LEASE_SECONDS)}
+    if body.status in ("printing", "spooled"):
+        update = {"status": body.status, "lease_expires_at": now + timedelta(seconds=PRINT_LEASE_SECONDS)}
+        if body.status == "spooled":
+            update["spooled_at"] = now
     elif body.status == "printed":
         update = {"status": "printed", "printed_at": now, "error": None}
     elif body.status == "failed":
         update = {"status": "failed", "error": body.error or "Erreur d'impression"}
     else:
-        update = {"status": "queued", "agent_id": None, "lease_id": None, "lease_expires_at": None, "error": body.error or None}
+        # printer unavailable before anything was sent: wait and retry (never counts as a print)
+        update = {"status": "retry_wait", "next_attempt_at": now + timedelta(seconds=30), "agent_id": None, "lease_id": None,
+                  "lease_expires_at": None, "error": body.error or None}
     res = await db.print_jobs.update_one({"id": job_id, "lease_id": body.lease_id, "status": job["status"]},
                                          {"$set": {**update, "updated_at": now}})
     if not res.modified_count:

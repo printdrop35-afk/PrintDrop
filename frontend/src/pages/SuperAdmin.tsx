@@ -3,9 +3,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Building2, Euro, Loader2, LogOut, Receipt, Store, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Logo } from "@/components/Logo";
+import { AdminBilling, SubscriptionCell } from "@/components/AdminBilling";
 import { useMe } from "@/hooks/useMe";
 import { apiGet, apiPatch, errorMessage } from "@/lib/api";
 import { endSession } from "@/lib/session";
@@ -26,7 +26,7 @@ export default function SuperAdmin() {
       qc.invalidateQueries({ queryKey: ["admin-orgs"] });
       qc.invalidateQueries({ queryKey: ["admin-stats"] });
       qc.invalidateQueries({ queryKey: ["admin-audit"] });
-      toast.success(`${o.name} : ${tk("org", o.status)} · ${tk("plan", o.plan)}`);
+      toast.success(`${o.name} : ${tk("org", o.status)}`);
     },
     onError: (e) => toast.error(errorMessage(e)),
   });
@@ -69,9 +69,9 @@ export default function SuperAdmin() {
 
         <section className="rounded-2xl border bg-card">
           <div className="border-b p-5"><h2 className="text-lg font-semibold text-ink">Entreprises clientes</h2>
-            <p className="text-xs text-muted-foreground">Abonnements : facturation SaaS automatisée prévue à une étape ultérieure — le plan est attribué manuellement.</p></div>
+            <p className="text-xs text-muted-foreground">Abonnement : offre et statut. « Offrir » prolonge sans paiement ni facture (tracé dans le journal).</p></div>
           <Table data-testid="admin-orgs-table">
-            <TableHeader><TableRow><TableHead>Entreprise</TableHead><TableHead className="hidden md:table-cell">Boutiques</TableHead><TableHead className="hidden md:table-cell">Commandes</TableHead><TableHead className="hidden sm:table-cell">Encaissé</TableHead><TableHead>Plan</TableHead><TableHead>Statut</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Entreprise</TableHead><TableHead className="hidden md:table-cell">Boutiques</TableHead><TableHead className="hidden md:table-cell">Commandes</TableHead><TableHead className="hidden sm:table-cell">Encaissé</TableHead><TableHead>Abonnement</TableHead><TableHead>Compte</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
             <TableBody>
               {rows.map((o) => (
                 <TableRow key={o.id} data-testid={`admin-org-row-${o.owner_email}`}>
@@ -80,10 +80,7 @@ export default function SuperAdmin() {
                   <TableCell className="hidden md:table-cell">{o.orders_count}</TableCell>
                   <TableCell className="hidden font-mono sm:table-cell">{formatEUR(o.revenue_cents)}</TableCell>
                   <TableCell>
-                    <Select value={o.plan} onValueChange={(v: string) => update.mutate({ id: o.id, body: { plan: v as AdminOrgOut["plan"] } })}>
-                      <SelectTrigger size="sm" className="w-28" data-testid={`admin-plan-select-${o.owner_email}`}><SelectValue>{(v) => tk("plan", v as string)}</SelectValue></SelectTrigger>
-                      <SelectContent>{(["essai", "starter", "pro"] as const).map((p) => <SelectItem key={p} value={p}>{tk("plan", p)}</SelectItem>)}</SelectContent>
-                    </Select>
+                    <SubscriptionCell org={o} />
                   </TableCell>
                   <TableCell>
                     <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-semibold", o.status === "active" ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800")} data-testid={`admin-org-status-${o.owner_email}`}>{tk("org", o.status)}</span>
@@ -99,6 +96,8 @@ export default function SuperAdmin() {
             </TableBody>
           </Table>
         </section>
+
+        <AdminBilling />
 
         <section className="rounded-2xl border bg-card p-5">
           <h2 className="text-lg font-semibold text-ink">Journal plateforme</h2>

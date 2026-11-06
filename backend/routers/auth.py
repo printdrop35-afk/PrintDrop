@@ -10,6 +10,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from lib.authz import ROLE_PERMS, PLATFORM_PERMS, Principal, TenantRepo, audit, get_principal, load_principal, now_utc
 from lib.db import db
+from lib.billing import subscription_view
+from lib.platform import get_settings
 from lib.pricing import default_pricing
 from lib.security import COOKIE_NAME, SESSION_HOURS, create_session_token, hash_password, verify_password
 from models.schemas import LoginIn, MeOut, OrgOut, RegisterIn, ShopOut, UserOut
@@ -56,7 +58,7 @@ async def build_me(p: Principal) -> MeOut:
     if p.org_id:
         org_doc = await db.organizations.find_one({"id": p.org_id}, {"_id": 0})
         if org_doc:
-            org = OrgOut(**org_doc)
+            org = OrgOut(**{**org_doc, "subscription": await subscription_view(org_doc)})
             if p.org_status == "active":
                 perms |= ROLE_PERMS.get(p.tenant_role or "", set())
                 shops = [ShopOut(**s) for s in await TenantRepo(p.org_id).find("shops", sort=[("created_at", 1)])]
@@ -78,8 +80,11 @@ async def register(body: RegisterIn, request: Request, response: Response):
         "platform_role": None, "active": True, "created_at": now,
     })
     await db.organizations.insert_one({
-        "id": org_id, "name": body.org_name.strip(), "status": "active", "plan": "essai",
-        "owner_id": user_id, "created_at": now,
+        "id": org_id, "name": body.org_name.strip(), "status": "active", "plan": "pro",
+        "owner_id": user_id, "created_at": now, "report_email": True,
+        "subscription": {"plan_code": "pro", "period": "monthly", "status": "trialing",
+                         "trial_ends_at": now + timedelta(days=(await get_settings())["trial_days"]),
+                         "current_period_end": None, "granted_by_admin": False, "updated_at": now},
     })
     await db.memberships.insert_one({
         "id": str(uuid.uuid4()), "org_id": org_id, "user_id": user_id, "role": "owner", "active": True, "created_at": now,

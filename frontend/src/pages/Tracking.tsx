@@ -96,7 +96,8 @@ export default function Tracking() {
             <div className={cn("flex items-center justify-between rounded-2xl p-5", order.payment_status === "unpaid" ? "bg-ink text-white" : "border bg-emerald-50 text-emerald-900")} data-testid="track-payment-banner">
               <div>
                 <p className="text-sm opacity-80">{order.payment_status === "unpaid" ? "À régler au comptoir" : "Commande réglée"}</p>
-                <p className="font-mono text-2xl font-bold" data-testid="track-total">{formatEUR(order.total_cents)}</p>
+                <p className="font-mono text-2xl font-bold" data-testid="track-total">{formatEUR(order.total_cents)} <span className="font-sans text-xs font-normal opacity-70">TTC</span></p>
+                {order.vat_cents !== null && order.total_ht_cents !== null && <p className="text-xs opacity-70" data-testid="track-vat">HT {formatEUR(order.total_ht_cents)} · TVA {formatEUR(order.vat_cents)}</p>}
               </div>
               <PaymentBadge status={order.payment_status} testId="track-payment-badge" />
             </div>

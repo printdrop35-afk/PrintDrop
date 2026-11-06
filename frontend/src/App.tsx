@@ -14,6 +14,9 @@ import Team from "@/pages/dashboard/Team";
 import Audit from "@/pages/dashboard/Audit";
 import Devices from "@/pages/dashboard/Devices";
 import Reports from "@/pages/dashboard/Reports";
+import Billing from "@/pages/dashboard/Billing";
+import PrintQueue, { Onboarding } from "@/pages/dashboard/PrintQueue";
+import InvoicePage from "@/pages/dashboard/Invoice";
 
 // One <Route> per page in src/pages; BrowserRouter already wraps this in main.tsx.
 export default function App() {
@@ -33,6 +36,10 @@ export default function App() {
           <Route path="tarifs" element={<Pricing />} />
           <Route path="boutique" element={<ShopSettings />} />
           <Route path="rapports" element={<Reports />} />
+          <Route path="abonnement" element={<Billing />} />
+          <Route path="file-impression" element={<PrintQueue />} />
+          <Route path="demarrage" element={<Onboarding />} />
+          <Route path="abonnement/facture/:id" element={<InvoicePage />} />
           <Route path="imprimantes" element={<Devices />} />
           <Route path="equipe" element={<Team />} />
           <Route path="journal" element={<Audit />} />

@@ -25,7 +25,31 @@ def detect_kind(data: bytes) -> str:
         return "png"
     if data.startswith(b"\xff\xd8\xff"):
         return "jpg"
-    raise StorageError("Format non pris en charge (PDF, PNG ou JPG uniquement)")
+    if data.startswith(b"PK\x03\x04") and b"word/" in data[:65536]:
+        return "docx"
+    raise StorageError("Format non pris en charge (PDF, Word .docx, PNG ou JPG)")
+
+
+def docx_to_pdf(data: bytes) -> bytes:
+    """Word -> PDF with LibreOffice (headless, isolated temp dir, 60 s timeout). The PDF is what gets priced and printed."""
+    import shutil
+    import subprocess
+    import tempfile
+    soffice = shutil.which("soffice") or shutil.which("libreoffice")
+    if not soffice:
+        raise StorageError("Conversion Word indisponible sur ce serveur — enregistrez votre document en PDF puis réessayez")
+    with tempfile.TemporaryDirectory(prefix="pd_conv_") as tmp:
+        src = Path(tmp) / "document.docx"
+        src.write_bytes(data)
+        try:
+            subprocess.run([soffice, "--headless", "--norestore", f"-env:UserInstallation=file://{tmp}/profile",
+                            "--convert-to", "pdf", "--outdir", tmp, str(src)], capture_output=True, timeout=60, check=False)
+        except subprocess.TimeoutExpired as exc:
+            raise StorageError("Conversion Word trop longue — envoyez le document en PDF") from exc
+        out = Path(tmp) / "document.pdf"
+        if not out.exists():
+            raise StorageError("Document Word illisible — enregistrez-le en PDF puis réessayez")
+        return out.read_bytes()
 
 
 def count_pages(data: bytes, kind: str) -> int:

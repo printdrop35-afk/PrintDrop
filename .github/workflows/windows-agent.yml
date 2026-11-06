@@ -1,0 +1,38 @@
+name: Agent Windows PrintDrop
+
+on:
+  push:
+    paths: ["agent/**", ".github/workflows/windows-agent.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      AGENT_VERSION: "0.2.0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Dépendances
+        run: pip install -r agent/requirements.txt pyinstaller==6.11.1
+      - name: Compilation de PrintDrop.exe
+        working-directory: agent
+        run: pyinstaller --onefile --noconsole --name PrintDrop --hidden-import win32timezone printdrop_agent.py
+      - name: SumatraPDF (moteur d'impression PDF, GPLv3)
+        working-directory: agent
+        shell: pwsh
+        run: |
+          Invoke-WebRequest "https://www.sumatrapdfreader.org/dl/rel/3.5.2/SumatraPDF-3.5.2-64.zip" -OutFile sumatra.zip
+          Expand-Archive sumatra.zip -DestinationPath sumatra
+          Copy-Item (Get-ChildItem sumatra -Filter *.exe -Recurse | Select-Object -First 1).FullName dist/SumatraPDF.exe
+      - name: Installateur (Inno Setup)
+        working-directory: agent/installer
+        run: |
+          choco install innosetup -y --no-progress
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" printdrop.iss
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PrintDrop-Setup
+          path: agent/dist/PrintDrop-Setup-*.exe

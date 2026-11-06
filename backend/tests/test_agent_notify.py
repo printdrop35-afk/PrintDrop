@@ -84,9 +84,18 @@ def test_requeue_when_printer_offline(client):
     order = place_order(client)
     o = find_order(owner, order["code"])
     owner.post(f"/orders/{o['id']}/status", json={"status": "printing"})
-    job = next(j for j in agent.post("/agent/jobs/claim").json()["jobs"] if j["order_code"] == order["code"])
+    job = None
+    for _ in range(10):  # other tests may have older jobs queued in the same shop: skip past them
+        batch = agent.post("/agent/jobs/claim").json()["jobs"]
+        job = next((j for j in batch if j["order_code"] == order["code"]), None)
+        for j in batch:
+            if j is not job:
+                agent.post(f"/agent/jobs/{j['id']}/report", json={"lease_id": j["lease_id"], "status": "printed"})
+        if job:
+            break
+    assert job
     r = agent.post(f"/agent/jobs/{job['id']}/report", json={"lease_id": job["lease_id"], "status": "requeue", "error": "Hors ligne"})
-    assert r.json()["status"] == "queued"
+    assert r.json()["status"] == "retry_wait"  # printer offline before printing: retried later, never counted as printed
     # all printers offline -> nothing is claimed
     agent.post("/agent/heartbeat", json={"printers": [{"name": "Imprimante PC offline", "status": "offline"}]})
     assert agent.post("/agent/jobs/claim").json()["jobs"] == []

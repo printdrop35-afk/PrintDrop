@@ -10,9 +10,12 @@ from fastapi.responses import FileResponse
 
 from lib.authz import audit, now_utc, request_origin
 from lib.db import db
-from lib.pricing import price_print, price_services
+from lib.billing import org_can_take_orders
+from lib.platform import shop_vat_bp
+from lib.pricing import finalize, price_extras, price_print, price_services, public_pricing
 from lib.security import new_secret_token, sha256, verify_file_link
-from lib.storage import MAX_BYTES, StorageError, count_pages, detect_kind, resolve, save_file
+import asyncio
+from lib.storage import docx_to_pdf, MAX_BYTES, StorageError, count_pages, detect_kind, resolve, save_file
 from models.schemas import (
     DocumentUploadOut, OrderCreateIn, OrderPublicOut, PublicShopOut, QuoteIn, QuoteOut, TrackIn,
 )
@@ -36,7 +39,7 @@ async def get_public_shop(slug: str) -> dict:
     raise HTTPException(status_code=404, detail="Boutique introuvable")
 
 
-async def build_quote(shop: dict, body: QuoteIn) -> tuple[list[dict], int]:
+async def build_quote(shop: dict, body: QuoteIn) -> dict:
     lines: list[dict] = []
     for item in body.items:
         doc = await db.documents.find_one(
@@ -48,25 +51,34 @@ async def build_quote(shop: dict, body: QuoteIn) -> tuple[list[dict], int]:
             lines.append(price_print(shop["pricing"], doc["filename"], doc["id"], doc["page_count"], item.options.model_dump()))
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=f"{doc['filename']} : {exc}") from exc
-    lines.extend(price_services(shop["pricing"], body.services.model_dump()))
-    return lines, sum(line["subtotal_cents"] for line in lines)
+    try:
+        lines.extend(price_services(shop["pricing"], body.services.model_dump()))
+        lines.extend(price_extras(shop["pricing"], [e.model_dump() for e in body.extras]))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return finalize(shop["pricing"], lines, body.promo_code, await shop_vat_bp())
 
 
 @router.get("/public/shops/{slug}", response_model=PublicShopOut)
 async def public_shop(slug: str):
-    return await get_public_shop(slug)
+    shop = await get_public_shop(slug)
+    accepting = shop["accepting_orders"] and await org_can_take_orders(shop["org_id"])
+    return {**shop, "accepting_orders": accepting, "pricing": public_pricing(shop["pricing"], await shop_vat_bp())}
 
 
 @router.post("/public/shops/{slug}/documents", response_model=DocumentUploadOut)
 async def upload_document(slug: str, file: UploadFile = File(...)):
     shop = await get_public_shop(slug)
-    if not shop["accepting_orders"]:
+    if not shop["accepting_orders"] or not await org_can_take_orders(shop["org_id"]):
         raise HTTPException(status_code=409, detail="Cette boutique n'accepte pas de commandes pour le moment")
     data = await file.read(MAX_BYTES + 1)
     if len(data) > MAX_BYTES:
         raise HTTPException(status_code=413, detail="Fichier trop volumineux (25 Mo maximum)")
     try:
         kind = detect_kind(data)
+        if kind == "docx":
+            data = await asyncio.to_thread(docx_to_pdf, data)
+            kind = "pdf"
         pages = count_pages(data, kind)
     except StorageError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -85,20 +97,22 @@ async def upload_document(slug: str, file: UploadFile = File(...)):
 @router.post("/public/shops/{slug}/quote", response_model=QuoteOut)
 async def quote(slug: str, body: QuoteIn):
     shop = await get_public_shop(slug)
-    lines, total = await build_quote(shop, body)
-    return QuoteOut(lines=lines, total_cents=total)  # type: ignore[arg-type]
+    return QuoteOut(**await build_quote(shop, body))
 
 
 @router.post("/public/shops/{slug}/orders", response_model=OrderPublicOut)
 async def create_order(slug: str, body: OrderCreateIn, request: Request):
     shop = await get_public_shop(slug)
-    if not shop["accepting_orders"]:
+    if not shop["accepting_orders"] or not await org_can_take_orders(shop["org_id"]):
         raise HTTPException(status_code=409, detail="Cette boutique n'accepte pas de commandes pour le moment")
     digits = phone_digits(body.customer_phone)
     if len(digits) < 6:
         raise HTTPException(status_code=422, detail="Numéro de téléphone invalide")
-    lines, total = await build_quote(shop, body)
-    if not lines:
+    q = await build_quote(shop, body)
+    if q["promo_error"] and body.promo_code and not q["promo_code_applied"]:
+        raise HTTPException(status_code=422, detail=q["promo_error"])
+    lines, total = q["lines"], q["total_cents"]
+    if not any(line["kind"] not in ("discount", "minimum") for line in lines):
         raise HTTPException(status_code=422, detail="Ajoutez au moins un document ou un service")
     now = now_utc()
     order_id = str(uuid.uuid4())
@@ -124,6 +138,8 @@ async def create_order(slug: str, body: OrderCreateIn, request: Request):
         "customer_email": body.customer_email.lower() if body.customer_email else None, "notify": body.notify,
         "public_origin": request_origin(request),  # where the customer reached us — used for the tracking link
         "phone_digits": digits, "note": body.note.strip(), "lines": lines, "total_cents": total, "currency": "EUR",
+        "total_ht_cents": q["total_ht_cents"], "vat_cents": q["vat_cents"], "vat_rate_bp": q["vat_rate_bp"],
+        "discount_cents": q["discount_cents"], "promo_code": q["promo_code_applied"],
         "status": "pending", "payment_status": "unpaid", "payment_method": None, "paid_at": None,
         "created_at": now, "updated_at": now, "history": [{"status": "pending", "at": now, "by": "Client"}],
     }

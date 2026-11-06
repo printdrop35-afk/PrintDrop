@@ -22,7 +22,7 @@ ROLE_PERMS: dict[str, set[str]] = {
         "orders:read", "orders:update", "orders:pay", "documents:read",
         "shop:read", "shop:edit", "shop:create", "pricing:edit",
         "staff:read", "staff:manage", "audit:read", "devices:read", "devices:manage", "jobs:reprint",
-        "reports:read", "reports:manage", "paper:manage",
+        "reports:read", "reports:manage", "paper:manage", "billing:manage",
     },
     "manager": {
         "orders:read", "orders:update", "orders:pay", "documents:read",

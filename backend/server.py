@@ -16,9 +16,10 @@ load_dotenv(ROOT_DIR / '.env')
 from lib.db import client, db, ensure_indexes
 from lib.authz import now_utc
 from lib.storage import delete_file
-from lib.notify import process_notification_jobs
+from lib.notify import check_agents_offline, process_notification_jobs
 from lib.printing import expire_stale_leases
-from routers import admin, agent, auth, dashboard, devices, public, reports
+from migrations.runner import run_migrations
+from routers import admin, agent, auth, billing, printers, dashboard, devices, public, reports
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,7 @@ async def job_worker() -> None:
         try:
             await process_notification_jobs()
             await expire_stale_leases()
+            await check_agents_offline()
         except Exception as exc:
             logger.error("job_worker: %s", exc)
         await asyncio.sleep(5)
@@ -50,7 +52,8 @@ async def job_worker() -> None:
 # Startup runs before the yield, shutdown after it. Add your own setup/teardown here.
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.state.index_task = asyncio.create_task(ensure_indexes())  # background: a big index build must not block boot
+    app.state.index_task = asyncio.create_task(ensure_indexes())
+    await run_migrations()  # idempotent, versioned (migrations collection)  # background: a big index build must not block boot
     app.state.cleanup_task = asyncio.create_task(cleanup_orphan_uploads())
     app.state.worker_task = asyncio.create_task(job_worker())
     yield
@@ -80,6 +83,8 @@ api_router.include_router(admin.router)
 api_router.include_router(devices.router)
 api_router.include_router(agent.router)
 api_router.include_router(reports.router)
+api_router.include_router(billing.router)
+api_router.include_router(printers.router)
 
 # Include the router in the main app
 app.include_router(api_router)

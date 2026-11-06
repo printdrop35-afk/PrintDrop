@@ -65,10 +65,14 @@ async def revoke_agent(agent_id: str, p: Principal = Depends(require_tenant("dev
 async def list_printers(shop_id: str, p: Principal = Depends(require_tenant("devices:read"))):
     repo = tenant_repo(p)
     await get_shop_or_404(repo, shop_id)
-    active = {a["id"] for a in await repo.find("agents", {"shop_id": shop_id, "status": "active"})}
+    agents = {a["id"]: a for a in await repo.find("agents", {"shop_id": shop_id, "status": "active"})}
     printers = await repo.find("printers", {"shop_id": shop_id}, sort=[("name", 1)])
-    return [PrinterOut(**pr, online=pr["agent_id"] in active and is_online(pr.get("last_seen_at")) and pr["status"] == "online")
-            for pr in printers if pr["agent_id"] in active]
+    counts = {r["_id"]: r["n"] for r in await repo.aggregate("print_jobs", [
+        {"$match": {"shop_id": shop_id, "status": {"$in": ["queued", "claimed", "spooled", "printing", "retry_wait"]}}},
+        {"$group": {"_id": "$printer_id", "n": {"$sum": 1}}}])}
+    return [PrinterOut(**{**pr, "agent_name": agents[pr["agent_id"]]["name"], "active_jobs": counts.get(pr["id"], 0)},
+                       online=is_online(agents[pr["agent_id"]].get("last_seen_at")) and pr["status"] == "online")
+            for pr in printers if pr["agent_id"] in agents]
 
 
 @router.patch("/printers/{printer_id}", response_model=PrinterOut)
@@ -78,6 +82,8 @@ async def update_printer(printer_id: str, body: PrinterUpdateIn, p: Principal = 
     if not pr:
         raise HTTPException(status_code=404, detail="Imprimante introuvable")
     changes = body.model_dump(exclude_none=True)
+    if "connection_type" in changes:
+        changes["connection_confirmed"] = True  # the owner states the real link (Windows only sees "network")
     if changes.get("is_default"):
             await db.printers.update_many({"org_id": p.org_id, "shop_id": pr["shop_id"]}, {"$set": {"is_default": False}})
     if changes:

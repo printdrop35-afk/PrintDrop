@@ -4,6 +4,7 @@ suspend/reactivate or change plan — it has no access to tenant documents or cu
 from fastapi import APIRouter, Depends, HTTPException
 
 from lib.authz import Principal, audit, require_platform
+from lib.billing import subscription_view
 from lib.db import db
 from models.schemas import AdminOrgOut, AdminOrgUpdateIn, AdminStatsOut, AuditOut
 
@@ -34,7 +35,8 @@ async def _org_rows(orgs: list[dict]) -> list[AdminOrgOut]:
     owners = {u["id"]: u["email"] for u in await db.users.find(
         {"id": {"$in": [o["owner_id"] for o in orgs]}}, {"_id": 0, "id": 1, "email": 1}).to_list(10000)}
     return [AdminOrgOut(
-        id=o["id"], name=o["name"], status=o["status"], plan=o["plan"], owner_email=owners.get(o["owner_id"], "—"),
+        id=o["id"], name=o["name"], status=o["status"], plan=o.get("plan", ""), subscription=await subscription_view(o),
+        owner_email=owners.get(o["owner_id"], "—"),
         shops_count=shops.get(o["id"], 0), orders_count=orders.get(o["id"], 0),
         revenue_cents=revenue.get(o["id"], 0), created_at=o["created_at"],
     ) for o in orgs]

@@ -3,6 +3,7 @@ Run: cd /app/backend && python seed.py"""
 
 import asyncio
 import uuid
+from datetime import timedelta
 
 from lib.authz import now_utc
 from lib.db import db, ensure_indexes
@@ -54,7 +55,10 @@ async def main() -> None:
         else:
             await db.organizations.update_one({"id": org["id"]}, {"$set": {"status": "active"}})
         # Demo owners use fictitious addresses: no nightly report e-mail for them.
-        await db.organizations.update_one({"id": org["id"]}, {"$set": {"report_email": False}})
+        await db.organizations.update_one({"id": org["id"]}, {"$set": {"report_email": False, "demo": True}})
+        await db.organizations.update_one({"id": org["id"], "subscription.granted_by_admin": {"$ne": True}}, {"$set": {
+            "plan": "pro", "subscription": {"plan_code": "pro", "period": "monthly", "status": "active", "granted_by_admin": True,
+                                             "current_period_end": now_utc() + timedelta(days=365), "trial_ends_at": None}}})
         for email, role in [(owner_email, "owner"), *staff]:
             if not await db.memberships.find_one({"user_id": ids[email]}):
                 await db.memberships.insert_one({"id": str(uuid.uuid4()), "org_id": org["id"], "user_id": ids[email],

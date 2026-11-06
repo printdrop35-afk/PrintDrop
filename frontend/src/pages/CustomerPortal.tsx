@@ -2,7 +2,7 @@ import { useRef, useState, type ChangeEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { FileText, ImageIcon, Loader2, MapPin, Minus, Plus, Trash2, UploadCloud, Copy, ScanLine } from "lucide-react";
+import { FileText, ImageIcon, Loader2, MapPin, Minus, Plus, Trash2, UploadCloud, Copy, ScanLine, Sparkles, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Logo } from "@/components/Logo";
 import { apiGet, apiPost, apiUpload, errorMessage } from "@/lib/api";
-import { formatEUR, tk } from "@/i18n";
+import { formatEUR, formatVat, tk } from "@/i18n";
 import { cn } from "@/lib/utils";
 import type {
   DocumentUploadOut, OrderCreateIn, OrderPublicOut, PaperSize, PrintOptions, PublicShopOut, QuoteIn, QuoteOut, ServicesIn,
@@ -52,7 +52,7 @@ function Segmented<T extends string>({ value, options, onChange, testId }: { val
   );
 }
 
-function DocCard({ doc, index, onChange, onRemove, lineCents }: { doc: CartDoc; index: number; onChange: (o: PrintOptions) => void; onRemove: () => void; lineCents?: number }) {
+function DocCard({ doc, index, onChange, onRemove, lineCents, sizes }: { doc: CartDoc; index: number; onChange: (o: PrintOptions) => void; onRemove: () => void; lineCents?: number; sizes: PaperSize[] }) {
   const o = doc.options;
   const set = (patch: Partial<PrintOptions>) => onChange({ ...o, ...patch });
   const isPdf = doc.upload.kind === "pdf";
@@ -83,7 +83,7 @@ function DocCard({ doc, index, onChange, onRemove, lineCents }: { doc: CartDoc; 
               <SelectValue>{(v) => tk("paper", v as string)}</SelectValue>
             </SelectTrigger>
             <SelectContent>
-              {PAPER_SIZES.map((s) => <SelectItem key={s} value={s} data-testid={`paper-option-${s}`}>{tk("paper", s)}</SelectItem>)}
+              {sizes.map((s) => <SelectItem key={s} value={s} data-testid={`paper-option-${s}`}>{tk("paper", s)}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -122,6 +122,9 @@ export default function CustomerPortal() {
   const [note, setNote] = useState("");
   const [email, setEmail] = useState("");
   const [notify, setNotify] = useState(true);
+  const [extras, setExtras] = useState<Record<string, number>>({});
+  const [promo, setPromo] = useState("");
+  const [promoApplied, setPromoApplied] = useState<string | null>(null);
 
   const shopQ = useQuery({ queryKey: ["public-shop", slug], queryFn: () => apiGet<PublicShopOut>(`/public/shops/${slug}`), retry: false });
   const shop = shopQ.isError ? undefined : shopQ.data;
@@ -129,8 +132,11 @@ export default function CustomerPortal() {
   const quoteBody: QuoteIn = {
     items: docs.map((d) => ({ document_id: d.upload.id, upload_token: d.upload.upload_token, options: d.options })),
     services,
+    extras: Object.entries(extras).filter(([, q]) => q > 0).map(([service_id, quantity]) => ({ service_id, quantity })),
+    promo_code: promoApplied,
   };
-  const hasSomething = docs.length > 0 || services.photocopy_bw + services.photocopy_color + services.scan_pages > 0;
+  const sizes = PAPER_SIZES.filter((s) => shop?.pricing.print[s]?.active ?? true);
+  const hasSomething = docs.length > 0 || services.photocopy_bw + services.photocopy_color + services.scan_pages > 0 || quoteBody.extras.length > 0;
   const quoteQ = useQuery({
     queryKey: ["quote", slug, quoteBody],
     queryFn: () => apiPost<QuoteOut>(`/public/shops/${slug}/quote`, quoteBody),
@@ -148,7 +154,7 @@ export default function CustomerPortal() {
       setUploading((n) => n + 1);
       try {
         const upload = await apiUpload<DocumentUploadOut>(`/public/shops/${slug}/documents`, file);
-        setDocs((prev) => [...prev, { upload, options: { ...DEFAULT_OPTIONS } }]);
+        setDocs((prev) => [...prev, { upload, options: { ...DEFAULT_OPTIONS, paper_size: sizes[0] ?? "A4" } }]);
         toast.success(`${upload.filename} ajouté`);
       } catch (err) {
         toast.error(`${file.name} : ${errorMessage(err, "envoi impossible")}`);
@@ -221,10 +227,10 @@ export default function CustomerPortal() {
               <span className="mt-3 font-heading text-lg font-semibold text-ink">{uploading > 0 ? "Envoi en cours…" : "Ajouter des documents"}</span>
               <span className="mt-1 text-sm text-muted-foreground">PDF, JPG ou PNG · 25 Mo max · fichiers privés</span>
             </button>
-            <input ref={fileInput} type="file" multiple accept="application/pdf,image/png,image/jpeg" className="hidden" onChange={onFiles} data-testid="upload-file-input" />
+            <input ref={fileInput} type="file" multiple accept="application/pdf,image/png,image/jpeg,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="hidden" onChange={onFiles} data-testid="upload-file-input" />
 
             {docs.map((d, i) => (
-              <DocCard key={d.upload.id} doc={d} index={i} lineCents={lineFor(d.upload.id)}
+              <DocCard key={d.upload.id} doc={d} index={i} lineCents={lineFor(d.upload.id)} sizes={sizes}
                 onChange={(options) => setDocs(docs.map((x, j) => (j === i ? { ...x, options } : x)))}
                 onRemove={() => setDocs(docs.filter((_, j) => j !== i))} />
             ))}
@@ -232,11 +238,60 @@ export default function CustomerPortal() {
             <section className="rounded-2xl border bg-white px-4 py-2 shadow-sm" data-testid="services-section">
               <p className="pt-2 text-xs font-semibold tracking-[0.15em] text-slate-500 uppercase">Services au comptoir</p>
               <div className="divide-y">
-                {svc("photocopy_bw", "Photocopies N&B", shop.pricing.photocopy.bw, Copy)}
-                {svc("photocopy_color", "Photocopies couleur", shop.pricing.photocopy.color, Copy)}
+                {shop.pricing.photocopy.active && svc("photocopy_bw", "Photocopies N&B", shop.pricing.photocopy.bw, Copy)}
+                {shop.pricing.photocopy.active && svc("photocopy_color", "Photocopies couleur", shop.pricing.photocopy.color, Copy)}
                 {svc("scan_pages", "Numérisation (scan)", shop.pricing.scan_cents, ScanLine)}
+                {shop.pricing.services.map((s) => (
+                  <div key={s.id} className="flex items-center justify-between gap-3 py-3" data-testid={`extra-${s.id}`}>
+                    <div className="flex items-center gap-3">
+                      <Sparkles className="size-5 text-slate-400" />
+                      <div>
+                        <p className="text-sm font-medium text-ink">{s.name}</p>
+                        <p className="text-xs text-muted-foreground">{s.price_from ? "à partir de " : ""}{formatEUR(s.price_cents)} {tk("unit", s.unit)}{s.description ? ` · ${s.description}` : ""}</p>
+                      </div>
+                    </div>
+                    <Stepper value={extras[s.id] ?? 0} onChange={(v) => setExtras({ ...extras, [s.id]: v })} testId={`extra-${s.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`} />
+                  </div>
+                ))}
               </div>
             </section>
+
+            {(shop.pricing.rules.length > 0 || shop.pricing.auto_discounts.length > 0 || shop.pricing.min_order_cents > 0 || shop.pricing.has_promo_codes) && (
+              <section className="space-y-2 rounded-2xl border bg-white p-4 shadow-sm" data-testid="offers-section">
+                <p className="text-xs font-semibold tracking-[0.15em] text-slate-500 uppercase">Remises & conditions</p>
+                {shop.pricing.rules.map((r) => <p key={r.id} className="text-sm text-emerald-700">{r.name} : −{r.discount_pct} % sur l'impression dès {r.min_pages} pages</p>)}
+                {shop.pricing.auto_discounts.map((d, i) => <p key={i} className="text-sm text-emerald-700">{d.name} : −{d.kind === "percent" ? `${d.value} %` : formatEUR(d.value)}{d.min_order_cents ? ` dès ${formatEUR(d.min_order_cents)}` : ""}</p>)}
+                {shop.pricing.min_order_cents > 0 && <p className="text-xs text-muted-foreground">Minimum de commande : {formatEUR(shop.pricing.min_order_cents)}</p>}
+                {shop.pricing.has_promo_codes && (
+                  <div className="flex gap-2 pt-1">
+                    <Input value={promo} onChange={(e) => setPromo(e.target.value.toUpperCase())} placeholder="Code promo" className="h-10 font-mono" data-testid="promo-code-input" />
+                    <Button variant="outline" className="h-10" onClick={() => setPromoApplied(promo.trim() || null)} data-testid="promo-apply-button"><Tag className="size-4" /> Appliquer</Button>
+                  </div>
+                )}
+                {promoApplied && quote?.promo_error && <p className="text-xs text-rose-600" data-testid="promo-error">{quote.promo_error}</p>}
+                {promoApplied && quote?.promo_code_applied && <p className="text-xs text-emerald-700" data-testid="promo-success">Code {quote.promo_code_applied} appliqué</p>}
+              </section>
+            )}
+
+            {quote && quote.lines.length > 0 && (
+              <section className="rounded-2xl border bg-white p-4 shadow-sm" data-testid="price-breakdown">
+                <p className="text-xs font-semibold tracking-[0.15em] text-slate-500 uppercase">Détail du prix</p>
+                <ul className="mt-2 divide-y text-sm">
+                  {quote.lines.map((l, i) => (
+                    <li key={i} className="flex justify-between gap-3 py-2" data-testid={`breakdown-line-${i}`}>
+                      <span className="min-w-0"><span className={cn(l.kind === "discount" && "text-emerald-700")}>{l.label}</span>
+                        {l.filename && <span className="block truncate text-xs text-muted-foreground">{l.filename} · {l.pages} p. × {l.copies}</span>}</span>
+                      <span className={cn("shrink-0 font-mono", l.subtotal_cents < 0 && "text-emerald-700")}>{formatEUR(l.subtotal_cents)}</span>
+                    </li>
+                  ))}
+                </ul>
+                <dl className="mt-2 space-y-1 border-t pt-2 text-sm">
+                  <div className="flex justify-between text-muted-foreground"><dt>Total HT</dt><dd className="font-mono" data-testid="breakdown-ht">{formatEUR(quote.total_ht_cents)}</dd></div>
+                  <div className="flex justify-between text-muted-foreground"><dt>TVA {formatVat(quote.vat_rate_bp)}</dt><dd className="font-mono" data-testid="breakdown-vat">{formatEUR(quote.vat_cents)}</dd></div>
+                  <div className="flex justify-between font-semibold text-ink"><dt>Total TTC</dt><dd className="font-mono" data-testid="breakdown-ttc">{formatEUR(quote.total_cents)}</dd></div>
+                </dl>
+              </section>
+            )}
 
             <section className="space-y-3 rounded-2xl border bg-white p-4 shadow-sm" data-testid="customer-section">
               <p className="text-xs font-semibold tracking-[0.15em] text-slate-500 uppercase">Vos coordonnées</p>
@@ -271,7 +326,7 @@ export default function CustomerPortal() {
           <div className="mx-auto flex max-w-[540px] items-center gap-4 px-4 py-3">
             <div className="flex-1">
               <p className="text-xs text-muted-foreground">
-                {quoteQ.isError ? <span className="text-rose-600" data-testid="quote-error">{errorMessage(quoteQ.error)}</span> : "Total TTC calculé par la boutique"}
+                {quoteQ.isError ? <span className="text-rose-600" data-testid="quote-error">{errorMessage(quoteQ.error)}</span> : quote ? `dont TVA ${formatEUR(quote.vat_cents)} · HT ${formatEUR(quote.total_ht_cents)}` : "Total TTC calculé par la boutique"}
               </p>
               <p className="font-mono text-2xl font-bold text-ink" data-testid="quote-total">
                 {quote ? formatEUR(quote.total_cents) : formatEUR(0)}
@@ -279,7 +334,7 @@ export default function CustomerPortal() {
               </p>
             </div>
             <Button className="h-12 px-6 text-base" disabled={!canSubmit || order.isPending} data-testid="submit-order-button"
-              onClick={() => order.mutate({ ...quoteBody, customer_name: name, customer_phone: phone, customer_email: email.trim() || null, notify, note })}>
+              onClick={() => order.mutate({ ...quoteBody, promo_code: quote?.promo_code_applied ?? null, customer_name: name, customer_phone: phone, customer_email: email.trim() || null, notify, note })}>
               {order.isPending ? "Envoi…" : "Commander"}
             </Button>
           </div>

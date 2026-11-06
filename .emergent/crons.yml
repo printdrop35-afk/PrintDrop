@@ -7,3 +7,10 @@ crons:
     endpoint: "{{BASE_URL}}/api/cron/daily-report"
     method: POST
     enabled: true
+  - name: subscriptions-sweep
+    description: "Chaque matin à 8h (Paris) : met à jour les statuts d'abonnement et envoie les rappels de renouvellement (J-3, expiration)."
+    schedule: "0 8 * * *"
+    timezone: "Europe/Paris"
+    endpoint: "{{BASE_URL}}/api/cron/subscriptions-sweep"
+    method: POST
+    enabled: true
