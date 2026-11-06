@@ -36,4 +36,4 @@ via SumatraPDF, débranchement/rebranchement, nettoyage `%LOCALAPPDATA%\PrintDro
 ## 4. Déploiement
 Variables backend : `MONGO_URL`, `DB_NAME`, `JWT_SECRET`, `STORAGE_DIR`, `EMERGENT_EMAIL_KEY`, `WEBHOOK_CRON_SECRET`, facultatives
 `MOLLIE_API_KEY`, `TWILIO_*`, `AGENT_DOWNLOAD_URL`, `AGENT_VERSION`. Migrations automatiques au démarrage (`python -m migrations.runner`).
-Crons : `.emergent/crons.yml`. Agent : pousser le dépôt sur GitHub → workflow « Agent Windows PrintDrop » → publier l'installateur → définir `AGENT_DOWNLOAD_URL`.
+Crons : `.emergent/crons.yml`. Agent : Save to GitHub (branche main) → le workflow « Agent Windows PrintDrop » compile et publie la Release → lien `…/releases/latest/download/PrintDrop-Setup.exe` → définir `AGENT_DOWNLOAD_URL`.

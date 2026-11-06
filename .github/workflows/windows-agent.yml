@@ -5,6 +5,9 @@ on:
     paths: ["agent/**", ".github/workflows/windows-agent.yml"]
   workflow_dispatch:
 
+permissions:
+  contents: write  # needed to publish the installer as a GitHub Release
+
 jobs:
   build:
     runs-on: windows-latest
@@ -36,3 +39,20 @@ jobs:
         with:
           name: PrintDrop-Setup
           path: agent/dist/PrintDrop-Setup-*.exe
+      - name: Nom stable pour le lien de téléchargement
+        shell: pwsh
+        run: Copy-Item agent/dist/PrintDrop-Setup-*.exe agent/dist/PrintDrop-Setup.exe
+      - name: Publication (GitHub Release)
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: agent-v${{ env.AGENT_VERSION }}
+          name: Agent Windows PrintDrop ${{ env.AGENT_VERSION }}
+          make_latest: true
+          body: |
+            Installateur de l'agent Windows PrintDrop (Windows 10/11).
+            Lien direct permanent : https://github.com/${{ github.repository }}/releases/latest/download/PrintDrop-Setup.exe
+            Non signé numériquement : Windows SmartScreen peut afficher « Informations complémentaires → Exécuter quand même ».
+          files: |
+            agent/dist/PrintDrop-Setup.exe
+            agent/dist/PrintDrop-Setup-*.exe

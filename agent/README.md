@@ -88,3 +88,12 @@ copiés dans `C:\ProgramData\PrintDrop\dryrun_output`. **Ne jamais utiliser en p
 - [ ] Coupure réseau pendant téléchargement et pendant impression ; redémarrage du PC pendant impression
 - [ ] Deux agents sur la même boutique : aucun travail imprimé deux fois
 - [ ] Fonctionnement en service Windows après redémarrage, imprimantes réseau
+
+## Publier l'installateur (GitHub)
+1. Dans Emergent : **Save → Save to GitHub** (branche `main`).
+2. GitHub compile automatiquement l'installateur (onglet **Actions → Agent Windows PrintDrop**, ~5 min ; ou « Run workflow »).
+3. Il est publié dans **Releases** avec un lien permanent :
+   `https://github.com/<compte>/<dépôt>/releases/latest/download/PrintDrop-Setup.exe`
+   (le dépôt doit être **public** pour que les boutiques puissent le télécharger sans compte GitHub).
+4. Communiquez ce lien : il est enregistré dans `AGENT_DOWNLOAD_URL` et le bouton « Télécharger l'agent » s'active.
+Pour une nouvelle version : modifier `AGENT_VERSION` dans le workflow puis repousser.
