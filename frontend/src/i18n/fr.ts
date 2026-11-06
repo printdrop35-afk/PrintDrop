@@ -32,7 +32,22 @@ export const fr = {
   "nav.shop": "Boutique & QR code",
   "nav.team": "Équipe",
   "nav.audit": "Journal d'audit",
+  "nav.devices": "Imprimantes & agent",
+  "nav.reports": "Rapports",
   "nav.logout": "Se déconnecter",
+  "job.queued": "En file",
+  "job.claimed": "Réservé par l'agent",
+  "job.printing": "Impression…",
+  "job.printed": "Imprimé",
+  "job.failed": "Échec",
+  "job.cancelled": "Annulé",
+  "notif.queued": "En attente d'envoi",
+  "notif.sending": "Envoi…",
+  "notif.sent": "Envoyé",
+  "notif.failed": "Échec",
+  "notif.skipped": "Non envoyé",
+  "channel.email": "E-mail",
+  "channel.sms": "SMS",
 } as const;
 
 export type MessageKey = keyof typeof fr;

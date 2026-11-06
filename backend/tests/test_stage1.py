@@ -70,7 +70,7 @@ def owner_b():
 
 @pytest.fixture
 def admin():
-    c = login("admin@printdrop.fr", "Admin2026!")
+    c = login("printdrop35@gmail.com", "Admin2026!")
     yield c
     c.close()
 

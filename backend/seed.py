@@ -11,7 +11,7 @@ from lib.security import hash_password
 
 ACCOUNTS = [
     # email, password, name, platform_role
-    ("admin@printdrop.fr", "Admin2026!", "Super Admin PrintDrop", "superadmin"),
+    ("printdrop35@gmail.com", "Admin2026!", "Super Admin PrintDrop", "superadmin"),
     ("proprio@bastille.fr", "Bastille2026!", "Camille Martin", None),
     ("employe@bastille.fr", "Employe2026!", "Lucas Bernard", None),
     ("proprio@copylyon.fr", "Lyon2026!", "Sophie Durand", None),
@@ -42,6 +42,8 @@ async def main() -> None:
     await ensure_indexes()
     ids = {email: await upsert_user(email, pw, name, role) for email, pw, name, role in ACCOUNTS}
     await db.login_attempts.delete_many({})
+    # Former placeholder super-admin replaced by the real platform owner account.
+    await db.users.update_one({"email": "admin@printdrop.fr"}, {"$set": {"active": False, "platform_role": None}})
     for org_name, owner_email, shop_name, city, address, slug, staff in ORGS:
         owner_id = ids[owner_email]
         org = await db.organizations.find_one({"owner_id": owner_id})
@@ -51,6 +53,8 @@ async def main() -> None:
             await db.organizations.insert_one(dict(org))
         else:
             await db.organizations.update_one({"id": org["id"]}, {"$set": {"status": "active"}})
+        # Demo owners use fictitious addresses: no nightly report e-mail for them.
+        await db.organizations.update_one({"id": org["id"]}, {"$set": {"report_email": False}})
         for email, role in [(owner_email, "owner"), *staff]:
             if not await db.memberships.find_one({"user_id": ids[email]}):
                 await db.memberships.insert_one({"id": str(uuid.uuid4()), "org_id": org["id"], "user_id": ids[email],

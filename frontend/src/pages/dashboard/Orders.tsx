@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Banknote, CreditCard, ExternalLink, FileText, Info, Inbox } from "lucide-react";
+import { Banknote, CreditCard, ExternalLink, FileText, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PaymentBadge, StatusBadge } from "@/components/StatusBadge";
+import { AlertsBanner, NotificationsPanel, PrintJobsPanel } from "@/components/OrderExtras";
+import { PaperStockDialog, PaperStrip } from "@/components/PaperStock";
 import { useDashboard } from "@/hooks/useDashboard";
 import { apiGet, apiPost, errorMessage } from "@/lib/api";
 import { formatDateTime, formatEUR, tk } from "@/i18n";
@@ -25,7 +27,7 @@ const FILTERS = [
 const NEXT: Record<OrderStatus, { to: OrderStatus; label: string; variant?: "outline" | "destructive" }[]> = {
   pending: [{ to: "printing", label: "Lancer l'impression" }, { to: "ready", label: "Marquer prête", variant: "outline" }, { to: "cancelled", label: "Annuler", variant: "destructive" }],
   printing: [{ to: "ready", label: "Marquer prête" }, { to: "pending", label: "Remettre en attente", variant: "outline" }, { to: "cancelled", label: "Annuler", variant: "destructive" }],
-  ready: [{ to: "picked_up", label: "Marquer retirée" }, { to: "printing", label: "Réimprimer", variant: "outline" }, { to: "cancelled", label: "Annuler", variant: "destructive" }],
+  ready: [{ to: "picked_up", label: "Marquer retirée" }, { to: "printing", label: "Repasser en impression", variant: "outline" }, { to: "cancelled", label: "Annuler", variant: "destructive" }],
   picked_up: [],
   cancelled: [],
 };
@@ -45,9 +47,13 @@ function OrderSheet({ order, onClose }: { order: OrderOut | null; onClose: () =>
   const refresh = (o: OrderOut) => {
     qc.invalidateQueries({ queryKey: ["orders", shop.id] });
     qc.invalidateQueries({ queryKey: ["stats", shop.id] });
+    qc.invalidateQueries({ queryKey: ["paper", shop.id] });
+    qc.invalidateQueries({ queryKey: ["alerts", shop.id] });
     qc.setQueryData(["order", o.id], o);
+    qc.invalidateQueries({ queryKey: ["print-jobs", o.id] });
+    qc.invalidateQueries({ queryKey: ["notifications", o.id] });
   };
-  const live = useQuery({ queryKey: ["order", order?.id], queryFn: () => apiGet<OrderOut>(`/orders/${order?.id}`), enabled: !!order, initialData: order ?? undefined });
+  const live = useQuery({ queryKey: ["order", order?.id], queryFn: () => apiGet<OrderOut>(`/orders/${order?.id}`), enabled: !!order, initialData: order ?? undefined, refetchInterval: 5000 });
   const o = live.data ?? order;
 
   const status = useMutation({
@@ -78,7 +84,7 @@ function OrderSheet({ order, onClose }: { order: OrderOut | null; onClose: () =>
           <>
             <SheetHeader>
               <SheetTitle className="font-mono text-2xl" data-testid="order-detail-code">{o.code}</SheetTitle>
-              <SheetDescription>{o.customer_name} · {o.customer_phone} · {formatDateTime(o.created_at)}</SheetDescription>
+              <SheetDescription>{o.customer_name} · {o.customer_phone}{o.customer_email ? ` · ${o.customer_email}` : ""} · {formatDateTime(o.created_at)}</SheetDescription>
             </SheetHeader>
             <div className="space-y-5 px-4 pb-8">
               <div className="flex flex-wrap gap-2"><StatusBadge status={o.status} testId="order-detail-status" /><PaymentBadge status={o.payment_status} testId="order-detail-payment" /></div>
@@ -107,10 +113,8 @@ function OrderSheet({ order, onClose }: { order: OrderOut | null; onClose: () =>
                 <li className="flex justify-between bg-slate-50 p-3 font-semibold"><span>Total</span><span className="font-mono" data-testid="order-detail-total">{formatEUR(o.total_cents)}</span></li>
               </ul>
 
-              <div className="flex gap-2 rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900" data-testid="manual-print-notice">
-                <Info className="size-4 shrink-0" />
-                Impression manuelle : ouvrez le document et imprimez-le depuis ce poste. L'impression automatique via l'agent local Windows arrive à l'Étape 3.
-              </div>
+              <PrintJobsPanel order={o} canReprint={can("jobs:reprint")} />
+              <NotificationsPanel order={o} />
 
               {o.payment_status === "unpaid" && o.status !== "cancelled" && can("orders:pay") && (
                 <div className="space-y-2">
@@ -151,7 +155,8 @@ function OrderSheet({ order, onClose }: { order: OrderOut | null; onClose: () =>
 }
 
 export default function Orders() {
-  const { shop } = useDashboard();
+  const { shop, can } = useDashboard();
+  const [paperOpen, setPaperOpen] = useState(false);
   const [filter, setFilter] = useState("active");
   const [selected, setSelected] = useState<OrderOut | null>(null);
 
@@ -174,6 +179,8 @@ export default function Orders() {
         <p className="text-xs text-muted-foreground">Actualisation automatique toutes les 10 s</p>
       </div>
 
+      <AlertsBanner shopId={shop.id} onPaper={() => setPaperOpen(true)} onOpenOrder={async (id) => setSelected(await apiGet<OrderOut>(`/orders/${id}`))} />
+
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Kpi label="Commandes du jour" value={s?.orders_today ?? "—"} tone="text-ink" testId="kpi-orders-today" />
         <Kpi label="En attente" value={s?.pending ?? "—"} tone="text-amber-600" testId="kpi-pending" />
@@ -182,6 +189,9 @@ export default function Orders() {
         <Kpi label="Encaissé aujourd'hui" value={s ? formatEUR(s.revenue_today_cents) : "—"} tone="text-ink" testId="kpi-revenue-today" />
         <Kpi label="Reste à encaisser" value={s ? formatEUR(s.unpaid_cents) : "—"} tone="text-rose-600" testId="kpi-unpaid" />
       </div>
+
+      <PaperStrip shopId={shop.id} canEdit={can("paper:manage")} onEdit={() => setPaperOpen(true)} />
+      <PaperStockDialog shopId={shop.id} open={paperOpen} onOpenChange={setPaperOpen} />
 
       <Tabs value={filter} onValueChange={(v) => setFilter(String(v))}>
         <TabsList variant="line" className="flex-wrap" data-testid="orders-filter-tabs">

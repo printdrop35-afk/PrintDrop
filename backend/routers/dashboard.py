@@ -5,9 +5,11 @@ import uuid
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
-from lib.authz import ROLE_RANK, Principal, TenantRepo, audit, now_utc, require_tenant, tenant_repo
+from lib.authz import ROLE_RANK, Principal, TenantRepo, audit, now_utc, request_origin, require_tenant, tenant_repo
+from lib.notify import enqueue_ready
+from lib.printing import enqueue_initial_jobs
 from lib.db import db
 from lib.security import hash_password, sign_file_link
 from models.schemas import (
@@ -119,7 +121,7 @@ async def get_order(order_id: str, p: Principal = Depends(require_tenant("orders
 
 
 @router.post("/orders/{order_id}/status", response_model=OrderOut)
-async def change_status(order_id: str, body: OrderStatusIn, p: Principal = Depends(require_tenant("orders:update"))):
+async def change_status(order_id: str, body: OrderStatusIn, request: Request, p: Principal = Depends(require_tenant("orders:update"))):
     repo = tenant_repo(p)
     order = await get_order_or_404(repo, order_id)
     current, target = order["status"], body.status
@@ -136,7 +138,15 @@ async def change_status(order_id: str, body: OrderStatusIn, p: Principal = Depen
         raise HTTPException(status_code=409, detail="La commande a été modifiée entre-temps, rechargez")
     await audit("order.status", principal=p, resource_type="order", resource_id=order_id,
                 details={"code": order["code"], "from": current, "to": target})
-    return await get_order_or_404(repo, order_id)
+    updated = await get_order_or_404(repo, order_id)
+    if target == "printing" and current == "pending":
+        await enqueue_initial_jobs(updated, p.name)  # sent to the local agent, if one is paired
+    elif target == "ready":
+        await enqueue_ready(updated, request_origin(request))
+    elif target == "cancelled":
+        await repo.update_many("print_jobs", {"order_id": order_id, "status": {"$in": ["queued", "claimed"]}},
+                               {"$set": {"status": "cancelled", "updated_at": now}})
+    return updated
 
 
 @router.post("/orders/{order_id}/pay", response_model=OrderOut)

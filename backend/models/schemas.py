@@ -144,6 +144,8 @@ class QuoteIn(BaseModel):
 class OrderCreateIn(QuoteIn):
     customer_name: str = Field(min_length=2, max_length=80)
     customer_phone: str = Field(min_length=6, max_length=20)
+    customer_email: EmailStr | None = None
+    notify: bool = True
     note: str = Field(default="", max_length=500)
 
 
@@ -198,6 +200,8 @@ class OrderOut(BaseModel):
     shop_name: str
     customer_name: str
     customer_phone: str
+    customer_email: str | None = None
+    notify: bool = True
     note: str
     lines: list[QuoteLine]
     total_cents: int
@@ -293,3 +297,220 @@ class AdminOrgOut(BaseModel):
 class AdminOrgUpdateIn(BaseModel):
     status: Literal["active", "suspended"] | None = None
     plan: Literal["essai", "starter", "pro"] | None = None
+
+
+# ---------- notifications ----------
+class NotificationOut(BaseModel):
+    id: str
+    channel: Literal["email", "sms"]
+    recipient: str
+    status: Literal["queued", "sending", "sent", "failed", "skipped"]
+    attempts: int
+    last_error: str | None
+    created_at: datetime
+    sent_at: datetime | None
+
+
+class NotificationStatusOut(BaseModel):
+    email_configured: bool
+    sms_configured: bool
+
+
+# ---------- print agent (dashboard side) ----------
+JobStatus = Literal["queued", "claimed", "printing", "printed", "failed", "cancelled"]
+
+
+class PrintJobOut(BaseModel):
+    id: str
+    order_id: str
+    order_code: str
+    line_index: int
+    filename: str | None
+    kind: Literal["initial", "reprint"]
+    reason: str
+    status: JobStatus
+    printer_name: str | None
+    error: str | None
+    requested_by: str
+    created_at: datetime
+    updated_at: datetime
+    printed_at: datetime | None
+
+
+class ReprintIn(BaseModel):
+    reason: str = Field(min_length=3, max_length=200)
+
+
+class PairingCodeOut(BaseModel):
+    code: str
+    expires_at: datetime
+
+
+class AgentOut(BaseModel):
+    id: str
+    name: str
+    hostname: str
+    version: str
+    status: Literal["active", "revoked"]
+    online: bool
+    last_seen_at: datetime | None
+    created_at: datetime
+
+
+class PrinterOut(BaseModel):
+    id: str
+    agent_id: str
+    name: str
+    is_default: bool
+    enabled: bool
+    status: Literal["online", "offline", "error"]
+    status_detail: str
+    supports_color: bool
+    online: bool
+    last_seen_at: datetime | None
+
+
+class PrinterUpdateIn(BaseModel):
+    enabled: bool | None = None
+    is_default: bool | None = None
+
+
+# ---------- print agent (agent API) ----------
+class AgentPairIn(BaseModel):
+    code: str = Field(min_length=6, max_length=12)
+    name: str = Field(min_length=1, max_length=60)
+    hostname: str = Field(default="", max_length=80)
+    version: str = Field(default="", max_length=20)
+
+
+class AgentPairOut(BaseModel):
+    agent_id: str
+    api_key: str
+    shop_id: str
+    shop_name: str
+
+
+class AgentPrinterIn(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    is_default: bool = False
+    status: Literal["online", "offline", "error"] = "online"
+    detail: str = Field(default="", max_length=200)
+    supports_color: bool = True
+
+
+class AgentHeartbeatIn(BaseModel):
+    version: str = Field(default="", max_length=20)
+    printers: list[AgentPrinterIn] = Field(default_factory=list, max_length=50)
+
+
+class AgentHeartbeatOut(BaseModel):
+    shop_name: str
+    poll_seconds: int
+
+
+class AgentJobOut(BaseModel):
+    id: str
+    lease_id: str
+    order_code: str
+    kind: Literal["initial", "reprint"]
+    filename: str | None
+    file_kind: str
+    options: PrintOptions
+    pages: list[int]
+    printer_name: str
+    download_url: str
+
+
+class AgentClaimOut(BaseModel):
+    jobs: list[AgentJobOut]
+    message: str = ""
+
+
+class AgentReportIn(BaseModel):
+    lease_id: str = Field(min_length=8, max_length=64)
+    status: Literal["printing", "printed", "failed", "requeue"]
+    error: str = Field(default="", max_length=300)
+
+
+class AgentReportOut(BaseModel):
+    job_id: str
+    status: JobStatus
+
+
+# ---------- alerts & reports ----------
+class AlertOut(BaseModel):
+    kind: Literal["agent_offline", "printer_offline", "job_failed", "low_paper"]
+    message: str
+    since: datetime
+    printer_name: str | None = None
+    order_id: str | None = None
+    order_code: str | None = None
+
+
+class HourBucket(BaseModel):
+    hour: int
+    orders: int
+    revenue_cents: int
+
+
+class DailyReportOut(BaseModel):
+    day: str
+    shop_id: str
+    shop_name: str
+    orders_total: int
+    orders_cancelled: int
+    orders_picked_up: int
+    revenue_cents: int
+    revenue_cash_cents: int
+    revenue_card_cents: int
+    payments_count: int
+    avg_basket_cents: int
+    unpaid_cents: int
+    pages_bw: int
+    pages_color: int
+    sheets: int
+    photocopies: int
+    scans: int
+    jobs_printed: int
+    jobs_failed: int
+    busiest_hour: int | None
+    hours: list[HourBucket]
+
+
+class ReportSettingsIn(BaseModel):
+    daily_email: bool
+
+
+class ReportSettingsOut(BaseModel):
+    daily_email: bool
+    recipient: str
+
+
+# ---------- paper stock ----------
+class PaperLevelOut(BaseModel):
+    paper_size: PaperSize
+    stock_sheets: int
+    used_sheets: int
+    remaining_sheets: int
+    pct_used: int
+    set_at: datetime
+    level: Literal["ok", "low", "out"]
+
+
+class PaperStockOut(BaseModel):
+    alert_pct: int
+    levels: list[PaperLevelOut]
+
+
+class PaperStockIn(BaseModel):
+    """Sheets currently on hand per size; a value resets the count from now, null stops tracking that size."""
+    stock: dict[PaperSize, int | None] = Field(default_factory=dict)
+    alert_pct: int = Field(default=80, ge=10, le=100)
+
+    @field_validator("stock")
+    @classmethod
+    def positive(cls, v: dict[str, int | None]) -> dict[str, int | None]:
+        for size, n in v.items():
+            if n is not None and not 1 <= n <= 1_000_000:
+                raise ValueError(f"Stock {size} : entre 1 et 1 000 000 feuilles")
+        return v

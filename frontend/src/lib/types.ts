@@ -35,7 +35,7 @@ export interface PrintOptions { paper_size: PaperSize; color: ColorMode; duplex:
 export interface QuoteItemIn { document_id: string; upload_token: string; options: PrintOptions }
 export interface ServicesIn { photocopy_bw: number; photocopy_color: number; scan_pages: number }
 export interface QuoteIn { items: QuoteItemIn[]; services: ServicesIn }
-export interface OrderCreateIn extends QuoteIn { customer_name: string; customer_phone: string; note: string }
+export interface OrderCreateIn extends QuoteIn { customer_name: string; customer_phone: string; customer_email: string | null; notify: boolean; note: string }
 export interface QuoteLine {
   kind: "print" | "photocopy" | "scan"; label: string; document_id: string | null; filename: string | null;
   options: PrintOptions | null; pages: number; copies: number; sheets: number; unit_cents: number; subtotal_cents: number;
@@ -50,7 +50,7 @@ export interface OrderPublicOut {
 
 export interface OrderOut {
   id: string; code: string; shop_id: string; shop_name: string; customer_name: string; customer_phone: string;
-  note: string; lines: QuoteLine[]; total_cents: number; currency: string; status: OrderStatus;
+  customer_email: string | null; notify: boolean; note: string; lines: QuoteLine[]; total_cents: number; currency: string; status: OrderStatus;
   payment_status: PaymentStatus; payment_method: string | null; paid_at: string | null;
   created_at: string; updated_at: string; history: StatusEvent[];
 }
@@ -76,3 +76,48 @@ export interface AdminOrgOut {
   shops_count: number; orders_count: number; revenue_cents: number; created_at: string;
 }
 export interface AdminOrgUpdateIn { status?: "active" | "suspended"; plan?: "essai" | "starter" | "pro" }
+
+export interface NotificationOut {
+  id: string; channel: "email" | "sms"; recipient: string; status: "queued" | "sending" | "sent" | "failed" | "skipped";
+  attempts: number; last_error: string | null; created_at: string; sent_at: string | null;
+}
+export interface NotificationStatusOut { email_configured: boolean; sms_configured: boolean }
+
+export type JobStatus = "queued" | "claimed" | "printing" | "printed" | "failed" | "cancelled";
+export interface PrintJobOut {
+  id: string; order_id: string; order_code: string; line_index: number; filename: string | null; kind: "initial" | "reprint";
+  reason: string; status: JobStatus; printer_name: string | null; error: string | null; requested_by: string;
+  created_at: string; updated_at: string; printed_at: string | null;
+}
+export interface ReprintIn { reason: string }
+export interface PairingCodeOut { code: string; expires_at: string }
+export interface AgentOut {
+  id: string; name: string; hostname: string; version: string; status: "active" | "revoked"; online: boolean;
+  last_seen_at: string | null; created_at: string;
+}
+export interface PrinterOut {
+  id: string; agent_id: string; name: string; is_default: boolean; enabled: boolean; status: "online" | "offline" | "error";
+  status_detail: string; supports_color: boolean; online: boolean; last_seen_at: string | null;
+}
+export interface PrinterUpdateIn { enabled?: boolean; is_default?: boolean }
+
+export interface AlertOut {
+  kind: "agent_offline" | "printer_offline" | "job_failed" | "low_paper"; message: string; since: string;
+  printer_name: string | null; order_id: string | null; order_code: string | null;
+}
+export interface HourBucket { hour: number; orders: number; revenue_cents: number }
+export interface DailyReportOut {
+  day: string; shop_id: string; shop_name: string; orders_total: number; orders_cancelled: number; orders_picked_up: number;
+  revenue_cents: number; revenue_cash_cents: number; revenue_card_cents: number; payments_count: number; avg_basket_cents: number;
+  unpaid_cents: number; pages_bw: number; pages_color: number; sheets: number; photocopies: number; scans: number;
+  jobs_printed: number; jobs_failed: number; busiest_hour: number | null; hours: HourBucket[];
+}
+export interface ReportSettingsIn { daily_email: boolean }
+export interface ReportSettingsOut { daily_email: boolean; recipient: string }
+
+export interface PaperLevelOut {
+  paper_size: PaperSize; stock_sheets: number; used_sheets: number; remaining_sheets: number; pct_used: number;
+  set_at: string; level: "ok" | "low" | "out";
+}
+export interface PaperStockOut { alert_pct: number; levels: PaperLevelOut[] }
+export interface PaperStockIn { stock: Partial<Record<PaperSize, number | null>>; alert_pct: number }

@@ -52,6 +52,36 @@ INDEXES: dict[str, list[IndexModel]] = {
         IndexModel([("org_id", ASCENDING), ("at", DESCENDING)], name="org_at"),
         IndexModel([("action", ASCENDING), ("at", DESCENDING)], name="action_at"),
     ],
+    "notification_jobs": [
+        IndexModel([("id", ASCENDING)], name="id", unique=True),
+        IndexModel([("order_id", ASCENDING), ("event", ASCENDING), ("channel", ASCENDING)], name="order_event_channel", unique=True),
+        IndexModel([("status", ASCENDING), ("next_attempt_at", ASCENDING)], name="status_next"),
+    ],
+    "pairing_codes": [
+        IndexModel([("code_hash", ASCENDING)], name="code_hash", unique=True),
+        IndexModel([("expires_at", ASCENDING)], name="ttl", expireAfterSeconds=86400),
+    ],
+    "agents": [
+        IndexModel([("id", ASCENDING)], name="id", unique=True),
+        IndexModel([("key_hash", ASCENDING)], name="key_hash", unique=True),
+        IndexModel([("org_id", ASCENDING), ("shop_id", ASCENDING), ("status", ASCENDING)], name="org_shop_status"),
+    ],
+    "printers": [
+        IndexModel([("id", ASCENDING)], name="id", unique=True),
+        IndexModel([("org_id", ASCENDING), ("agent_id", ASCENDING), ("name", ASCENDING)], name="org_agent_name", unique=True),
+        IndexModel([("org_id", ASCENDING), ("shop_id", ASCENDING)], name="org_shop"),
+    ],
+    "print_jobs": [
+        IndexModel([("id", ASCENDING)], name="id", unique=True),
+        IndexModel([("order_id", ASCENDING), ("line_index", ASCENDING), ("kind_key", ASCENDING)], name="order_line_kind", unique=True),
+        IndexModel([("org_id", ASCENDING), ("shop_id", ASCENDING), ("status", ASCENDING), ("created_at", ASCENDING)], name="org_shop_status_created"),
+        IndexModel([("status", ASCENDING), ("lease_expires_at", ASCENDING)], name="status_lease"),
+    ],
+    "report_emails": [IndexModel([("org_id", ASCENDING), ("day", ASCENDING)], name="org_day", unique=True)],
+    "cron_runs": [
+        IndexModel([("run_id", ASCENDING)], name="run_id", unique=True),
+        IndexModel([("at", ASCENDING)], name="ttl", expireAfterSeconds=30 * 86400),
+    ],
     "login_attempts": [
         IndexModel([("email", ASCENDING), ("at", ASCENDING)], name="email_at"),
         IndexModel([("at", ASCENDING)], name="ttl", expireAfterSeconds=3600),

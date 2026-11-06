@@ -63,7 +63,7 @@ retrait impossible tant que la commande n'est pas payée.
 mais jamais commandés depuis 24 h. Étapes suivantes : file de tâches dédiée (notifications, webhooks,
 rétention des documents après retrait).
 
-## 5. PrintDrop Local Agent (Windows) — conception, ÉTAPE 3
+## 5. PrintDrop Local Agent (Windows) — implémenté (v0.1, voir agent/README.md)
 
 * Service Windows (.NET 8 ou Python + pywin32) installé sur le poste du comptoir.
 * **Appairage** : le propriétaire génère un code d'appairage à usage unique dans le tableau de bord ;
@@ -87,8 +87,9 @@ rétention des documents après retrait).
 | Étape | Contenu | État |
 |---|---|---|
 | 1 Fondations | Modèle de données, auth, organisations/boutiques/adhésions, isolation, portail client QR, dépôt privé, options d'impression, tarification serveur, gestion des commandes, encaissement comptoir, équipe, audit, super-admin de base, tests automatisés | **Implémenté** |
-| 2 Paiements & notifications | Paiement en ligne (Stripe) avec webhooks signés et idempotents, remboursements, SMS/e-mail de commande prête, file de tâches | À faire |
-| 3 Agent local | Appairage, API agent, gestion imprimantes/appareils, réimpressions contrôlées | À faire — tests matériels requis |
+| 2a Notifications | E-mail (Resend géré) + SMS (Twilio) « commande prête », file de tâches avec relances | **Implémenté** (SMS actif dès que les clés Twilio sont fournies) |
+| 2b Paiements | Paiement en ligne (Stripe) avec webhooks signés et idempotents, remboursements | À faire |
+| 3 Agent local | Appairage, API agent, gestion imprimantes/appareils, réimpressions contrôlées, programme Python Windows (`agent/`) | **Implémenté, testé en simulation uniquement** — tests matériels requis |
 | 4 Caisse & analytique | POS comptoir (ventes libres), clôture de caisse, rapports CA/opérations, export | À faire |
 | 5 SaaS | Abonnements facturés, limites par plan, impersonation auditée, multilingue (en, ar…) | À faire |
 

@@ -5,10 +5,10 @@ import re
 import secrets
 import uuid
 
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 
-from lib.authz import audit, now_utc
+from lib.authz import audit, now_utc, request_origin
 from lib.db import db
 from lib.pricing import price_print, price_services
 from lib.security import new_secret_token, sha256, verify_file_link
@@ -90,7 +90,7 @@ async def quote(slug: str, body: QuoteIn):
 
 
 @router.post("/public/shops/{slug}/orders", response_model=OrderPublicOut)
-async def create_order(slug: str, body: OrderCreateIn):
+async def create_order(slug: str, body: OrderCreateIn, request: Request):
     shop = await get_public_shop(slug)
     if not shop["accepting_orders"]:
         raise HTTPException(status_code=409, detail="Cette boutique n'accepte pas de commandes pour le moment")
@@ -121,6 +121,8 @@ async def create_order(slug: str, body: OrderCreateIn):
     order = {
         "id": order_id, "code": code, "org_id": shop["org_id"], "shop_id": shop["id"], "shop_name": shop["name"],
         "shop_slug": shop["slug"], "customer_name": body.customer_name.strip(), "customer_phone": body.customer_phone.strip(),
+        "customer_email": body.customer_email.lower() if body.customer_email else None, "notify": body.notify,
+        "public_origin": request_origin(request),  # where the customer reached us — used for the tracking link
         "phone_digits": digits, "note": body.note.strip(), "lines": lines, "total_cents": total, "currency": "EUR",
         "status": "pending", "payment_status": "unpaid", "payment_method": None, "paid_at": None,
         "created_at": now, "updated_at": now, "history": [{"status": "pending", "at": now, "by": "Client"}],

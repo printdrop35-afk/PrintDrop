@@ -1,0 +1,9 @@
+crons:
+  - name: daily-report
+    description: "Envoie chaque soir à 21h (Paris) le rapport du jour (CA, pages, heures) aux propriétaires"
+    cron: "0 21 * * *"
+    timezone: "Europe/Paris"
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    endpoint: "{{BASE_URL}}/api/cron/daily-report"
+    method: POST
+    enabled: true

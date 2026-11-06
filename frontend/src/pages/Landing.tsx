@@ -19,8 +19,9 @@ const ROADMAP: { label: string; done: boolean }[] = [
   { label: "Gestion des commandes & encaissement comptoir", done: true },
   { label: "Super-administration de la plateforme", done: true },
   { label: "Paiement en ligne avec webhooks vérifiés", done: false },
-  { label: "Agent local Windows (impression automatique)", done: false },
-  { label: "Notifications SMS / e-mail, statistiques avancées", done: false },
+  { label: "Agent local Windows (impression automatique, v0.1)", done: true },
+  { label: "Notifications e-mail / SMS « commande prête »", done: true },
+  { label: "Caisse, statistiques avancées & abonnements", done: false },
 ];
 
 export default function Landing() {

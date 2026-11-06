@@ -16,7 +16,9 @@ load_dotenv(ROOT_DIR / '.env')
 from lib.db import client, db, ensure_indexes
 from lib.authz import now_utc
 from lib.storage import delete_file
-from routers import admin, auth, dashboard, public
+from lib.notify import process_notification_jobs
+from lib.printing import expire_stale_leases
+from routers import admin, agent, auth, dashboard, devices, public, reports
 
 logger = logging.getLogger(__name__)
 
@@ -34,13 +36,25 @@ async def cleanup_orphan_uploads() -> None:
         await asyncio.sleep(1800)
 
 
+async def job_worker() -> None:
+    """Background job processing: notification delivery (with retries) and print-lease expiry."""
+    while True:
+        try:
+            await process_notification_jobs()
+            await expire_stale_leases()
+        except Exception as exc:
+            logger.error("job_worker: %s", exc)
+        await asyncio.sleep(5)
+
+
 # Startup runs before the yield, shutdown after it. Add your own setup/teardown here.
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.index_task = asyncio.create_task(ensure_indexes())  # background: a big index build must not block boot
     app.state.cleanup_task = asyncio.create_task(cleanup_orphan_uploads())
+    app.state.worker_task = asyncio.create_task(job_worker())
     yield
-    for task in (app.state.index_task, app.state.cleanup_task):
+    for task in (app.state.index_task, app.state.cleanup_task, app.state.worker_task):
         task.cancel()
         with suppress(asyncio.CancelledError):
             await task
@@ -63,6 +77,9 @@ api_router.include_router(auth.router)
 api_router.include_router(dashboard.router)
 api_router.include_router(public.router)
 api_router.include_router(admin.router)
+api_router.include_router(devices.router)
+api_router.include_router(agent.router)
+api_router.include_router(reports.router)
 
 # Include the router in the main app
 app.include_router(api_router)

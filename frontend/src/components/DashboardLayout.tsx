@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Navigate, NavLink, Outlet } from "react-router-dom";
-import { ClipboardList, Euro, LogOut, Menu, QrCode, ScrollText, Users, Store, Loader2 } from "lucide-react";
+import { BarChart3, ClipboardList, Euro, LogOut, Menu, Printer, QrCode, ScrollText, Users, Store, Loader2 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Logo } from "@/components/Logo";
@@ -14,8 +14,10 @@ import type { MeOut } from "@/lib/types";
 
 const NAV: { to: string; key: MessageKey; icon: typeof ClipboardList; perm: string; testId: string }[] = [
   { to: "/dashboard", key: "nav.orders", icon: ClipboardList, perm: "orders:read", testId: "nav-orders" },
+  { to: "/dashboard/rapports", key: "nav.reports", icon: BarChart3, perm: "reports:read", testId: "nav-reports" },
   { to: "/dashboard/tarifs", key: "nav.pricing", icon: Euro, perm: "shop:read", testId: "nav-pricing" },
   { to: "/dashboard/boutique", key: "nav.shop", icon: QrCode, perm: "shop:read", testId: "nav-shop" },
+  { to: "/dashboard/imprimantes", key: "nav.devices", icon: Printer, perm: "devices:read", testId: "nav-devices" },
   { to: "/dashboard/equipe", key: "nav.team", icon: Users, perm: "staff:read", testId: "nav-team" },
   { to: "/dashboard/journal", key: "nav.audit", icon: ScrollText, perm: "audit:read", testId: "nav-audit" },
 ];

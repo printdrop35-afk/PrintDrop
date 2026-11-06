@@ -21,13 +21,15 @@ ROLE_PERMS: dict[str, set[str]] = {
     "owner": {
         "orders:read", "orders:update", "orders:pay", "documents:read",
         "shop:read", "shop:edit", "shop:create", "pricing:edit",
-        "staff:read", "staff:manage", "audit:read",
+        "staff:read", "staff:manage", "audit:read", "devices:read", "devices:manage", "jobs:reprint",
+        "reports:read", "reports:manage", "paper:manage",
     },
     "manager": {
         "orders:read", "orders:update", "orders:pay", "documents:read",
-        "shop:read", "shop:edit", "pricing:edit", "staff:read", "audit:read",
+        "shop:read", "shop:edit", "pricing:edit", "staff:read", "audit:read", "devices:read", "devices:manage", "jobs:reprint",
+        "reports:read", "paper:manage",
     },
-    "operator": {"orders:read", "orders:update", "orders:pay", "documents:read", "shop:read"},
+    "operator": {"orders:read", "orders:update", "orders:pay", "documents:read", "shop:read", "devices:read", "jobs:reprint", "paper:manage"},
 }
 ROLE_RANK = {"operator": 1, "manager": 2, "owner": 3}
 PLATFORM_PERMS: dict[str, set[str]] = {"superadmin": {"platform:read", "platform:manage"}}
@@ -56,13 +58,14 @@ async def audit(
     resource_id: str = "",
     outcome: str = "allow",
     details: dict[str, Any] | None = None,
+    actor: str | None = None,
 ) -> None:
     await db.audit_logs.insert_one({
         "id": str(uuid.uuid4()),
         "at": now_utc(),
         "org_id": org_id if org_id is not None else (principal.org_id if principal else None),
         "actor_id": principal.user_id if principal else None,
-        "actor_email": principal.email if principal else "client-public",
+        "actor_email": principal.email if principal else (actor or "client-public"),
         "action": action,
         "resource_type": resource_type,
         "resource_id": resource_id,
@@ -144,6 +147,10 @@ class TenantRepo:
         res = await db[coll].update_one(self._f(f), update)
         return res.matched_count
 
+    async def update_many(self, coll: str, f: dict, update: dict) -> int:
+        res = await db[coll].update_many(self._f(f), update)
+        return res.modified_count
+
     async def count(self, coll: str, f: dict | None = None) -> int:
         return await db[coll].count_documents(self._f(f))
 
@@ -157,3 +164,10 @@ class TenantRepo:
 def tenant_repo(p: Principal) -> TenantRepo:
     assert p.org_id
     return TenantRepo(p.org_id)
+
+
+def request_origin(request: Request) -> str:
+    """Public origin of the current request (behind the ingress), used for links in notifications."""
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
+    return f"{proto}://{host}"

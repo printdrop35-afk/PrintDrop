@@ -120,6 +120,8 @@ export default function CustomerPortal() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [note, setNote] = useState("");
+  const [email, setEmail] = useState("");
+  const [notify, setNotify] = useState(true);
 
   const shopQ = useQuery({ queryKey: ["public-shop", slug], queryFn: () => apiGet<PublicShopOut>(`/public/shops/${slug}`), retry: false });
   const shop = shopQ.isError ? undefined : shopQ.data;
@@ -247,6 +249,14 @@ export default function CustomerPortal() {
                 <Input id="cphone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="h-11" autoComplete="tel" placeholder="06 12 34 56 78" data-testid="customer-phone-input" />
               </div>
               <div className="space-y-1.5">
+                <Label htmlFor="cemail">E-mail <span className="text-xs text-muted-foreground">(facultatif)</span></Label>
+                <Input id="cemail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-11" autoComplete="email" placeholder="vous@exemple.fr" data-testid="customer-email-input" />
+              </div>
+              <label className="flex items-start gap-2.5 text-sm">
+                <Checkbox checked={notify} onCheckedChange={(c: boolean) => setNotify(c)} className="mt-0.5" data-testid="customer-notify-checkbox" />
+                <span>Me prévenir par SMS{email ? " et e-mail" : ""} quand ma commande est prête</span>
+              </label>
+              <div className="space-y-1.5">
                 <Label htmlFor="cnote">Remarque (facultatif)</Label>
                 <Textarea id="cnote" value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="Ex : agrafer chaque exemplaire" data-testid="customer-note-input" />
               </div>
@@ -269,7 +279,7 @@ export default function CustomerPortal() {
               </p>
             </div>
             <Button className="h-12 px-6 text-base" disabled={!canSubmit || order.isPending} data-testid="submit-order-button"
-              onClick={() => order.mutate({ ...quoteBody, customer_name: name, customer_phone: phone, note })}>
+              onClick={() => order.mutate({ ...quoteBody, customer_name: name, customer_phone: phone, customer_email: email.trim() || null, notify, note })}>
               {order.isPending ? "Envoi…" : "Commander"}
             </Button>
           </div>
