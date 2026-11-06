@@ -1,0 +1,82 @@
+import asyncio
+from contextlib import asynccontextmanager, suppress
+from datetime import timedelta
+from fastapi import FastAPI, APIRouter
+from dotenv import load_dotenv
+from starlette.middleware.cors import CORSMiddleware
+import os
+import logging
+from pathlib import Path
+
+
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / '.env')
+
+# MongoDB connection
+from lib.db import client, db, ensure_indexes
+from lib.authz import now_utc
+from lib.storage import delete_file
+from routers import admin, auth, dashboard, public
+
+logger = logging.getLogger(__name__)
+
+
+async def cleanup_orphan_uploads() -> None:
+    """Background job: delete uploaded documents never attached to an order within 24h."""
+    while True:
+        try:
+            cutoff = now_utc() - timedelta(hours=24)
+            async for doc in db.documents.find({"status": "uploaded", "created_at": {"$lt": cutoff}}, {"_id": 0}):
+                delete_file(doc["storage_key"])
+                await db.documents.delete_one({"id": doc["id"]})
+        except Exception as exc:  # never let the job die
+            logger.error("cleanup_orphan_uploads: %s", exc)
+        await asyncio.sleep(1800)
+
+
+# Startup runs before the yield, shutdown after it. Add your own setup/teardown here.
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.index_task = asyncio.create_task(ensure_indexes())  # background: a big index build must not block boot
+    app.state.cleanup_task = asyncio.create_task(cleanup_orphan_uploads())
+    yield
+    for task in (app.state.index_task, app.state.cleanup_task):
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+    client.close()
+
+
+# Create the main app without a prefix
+app = FastAPI(lifespan=lifespan, title="PrintDrop API")
+
+# Create a router with the /api prefix
+api_router = APIRouter(prefix="/api")
+
+
+@api_router.get("/")
+async def root():
+    return {"message": "PrintDrop API", "stage": 1}
+
+
+api_router.include_router(auth.router)
+api_router.include_router(dashboard.router)
+api_router.include_router(public.router)
+api_router.include_router(admin.router)
+
+# Include the router in the main app
+app.include_router(api_router)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)

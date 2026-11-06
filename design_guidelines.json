@@ -1,0 +1,225 @@
+{
+  "theme_strategy": {
+    "default_mode": "light",
+    "theme_support": "light_and_dark_toggle",
+    "archetype": "THE_PERFORMANCE_PRO_HYBRID_EDITORIAL",
+    "rationale": "For PrintDrop (print shop SaaS in France), a crisp, modern editorial aesthetic with warm paper stone neutrals (#F8F9FA, #F1F3F5), deep indigo ink anchor (#0B132B, #1C2541), electric cyan/azure accents (#2563EB / #0284C7), and vivid emerald status indicators (#059669) creates trust and tactile precision. The mobile customer portal is ultra-clean with tactile card surfaces, live Euro pricing indicators, and immediate drag-and-drop / camera upload flow."
+  },
+  "typography": {
+    "font_family_heading": "Outfit Variable, sans-serif",
+    "font_family_body": "DM Sans Variable, sans-serif",
+    "font_family_mono": "JetBrains Mono Variable, monospace",
+    "scale_px": {
+      "display": 56,
+      "h1": 42,
+      "h2": 32,
+      "h3": 22,
+      "body": 16,
+      "caption": 14
+    },
+    "letter_spacing": {
+      "display": "-0.03em",
+      "h1": "-0.025em",
+      "h2": "-0.02em",
+      "h3": "-0.015em",
+      "body": "0em",
+      "caption": "0.01em",
+      "overline": "0.15em"
+    },
+    "font_weights": {
+      "display": "700",
+      "h1": "700",
+      "h2": "650",
+      "h3": "600",
+      "body": "400",
+      "body_medium": "500",
+      "body_bold": "600"
+    }
+  },
+  "colors": {
+    "surfaces": [
+      {
+        "name": "page",
+        "kind": "solid",
+        "bg": "#F8FAFC",
+        "on_bg": "#0F172A",
+        "on_bg_muted": "#475569",
+        "roles": {
+          "link": "#2563EB",
+          "error": "#DC2626",
+          "success": "#059669",
+          "warning": "#D97706",
+          "border": "#E2E8F0"
+        }
+      },
+      {
+        "name": "panel",
+        "kind": "solid",
+        "bg": "#FFFFFF",
+        "on_bg": "#0F172A",
+        "on_bg_muted": "#64748B",
+        "roles": {
+          "link": "#2563EB",
+          "error": "#DC2626",
+          "success": "#059669",
+          "warning": "#D97706",
+          "border": "#E2E8F0"
+        }
+      },
+      {
+        "name": "card_subtle",
+        "kind": "solid",
+        "bg": "#F1F5F9",
+        "on_bg": "#0F172A",
+        "on_bg_muted": "#475569",
+        "roles": {
+          "link": "#2563EB",
+          "error": "#DC2626",
+          "success": "#059669",
+          "warning": "#D97706",
+          "border": "#CBD5E1"
+        }
+      },
+      {
+        "name": "inverse",
+        "kind": "solid",
+        "bg": "#0F172A",
+        "on_bg": "#F8FAFC",
+        "on_bg_muted": "#94A3B8",
+        "roles": {
+          "link": "#60A5FA",
+          "error": "#F87171",
+          "success": "#34D399",
+          "warning": "#FBBF24",
+          "border": "#334155"
+        }
+      },
+      {
+        "name": "customer_portal_hero",
+        "kind": "solid",
+        "bg": "#0B132B",
+        "on_bg": "#F8FAFC",
+        "on_bg_muted": "#94A3B8",
+        "roles": {
+          "link": "#38BDF8",
+          "error": "#F87171",
+          "success": "#34D399",
+          "warning": "#FBBF24",
+          "border": "#1E293B"
+        }
+      },
+      {
+        "name": "badge_pending",
+        "kind": "solid",
+        "bg": "#FEF3C7",
+        "on_bg": "#92400E",
+        "on_bg_muted": "#78350F"
+      },
+      {
+        "name": "badge_printing",
+        "kind": "solid",
+        "bg": "#DBEAFE",
+        "on_bg": "#1E40AF",
+        "on_bg_muted": "#1E3A8A"
+      },
+      {
+        "name": "badge_ready",
+        "kind": "solid",
+        "bg": "#D1FAE5",
+        "on_bg": "#065F46",
+        "on_bg_muted": "#047857"
+      },
+      {
+        "name": "badge_picked_up",
+        "kind": "solid",
+        "bg": "#E2E8F0",
+        "on_bg": "#334155",
+        "on_bg_muted": "#475569"
+      },
+      {
+        "name": "badge_cancelled",
+        "kind": "solid",
+        "bg": "#FEE2E2",
+        "on_bg": "#991B1B",
+        "on_bg_muted": "#7F1D1D"
+      }
+    ],
+    "accent": "#2563EB",
+    "on_accent": "#FFFFFF",
+    "accent_hover": "#1D4ED8",
+    "accent_secondary": "#0D9488",
+    "on_accent_secondary": "#FFFFFF"
+  },
+  "entry_surfaces": {
+    "/": "editorial split hero — value proposition + CTA left with shop preview interactive calculator, live QR portal simulation card right",
+    "/login": "branded split auth — value positioning panel with cybercafé illustration metrics left, login form right",
+    "/register": "branded registration flow — organization + cybercafé setup wizard panel left, credentials form right",
+    "/s/:shopSlug": "mobile-first customer upload kiosk — boutique banner header top, document dropzone center, real-time live quotation footer with instant order button",
+    "/suivi/:orderCode": "live status tracker — visual step progression timeline, order summary, counter pickup QR and payment state banner",
+    "/dashboard": "operational mission control — shop metrics bar, instant order triage Kanban/Table, printer quick-toggles and QR poster generator modal",
+    "/superadmin": "platform management center — multi-tenant organization directory, global revenue stats, subscription tiers and shop suspension toggles"
+  },
+  "layout_and_grids": {
+    "mobile_first_rules": "Touch targets minimum 48px, sticky bottom action bar on mobile customer portal with total in EUR (€), responsive collapse of kanban to tabs or single column on < 768px viewports.",
+    "dashboard_grid": "Sidebar 260px fixed on desktop + top sticky header + full height scrollable main area. 12-column bento widgets for KPI counters (col-span-3), active orders feed (col-span-8), printer status & quick actions (col-span-4).",
+    "customer_portal_layout": "Max-width 540px centered mobile container with tactile card elevation (shadow-sm, border border-slate-200), sticky floating bottom bar for order validation."
+  },
+  "visual_enhancers": {
+    "paper_texture": "Subtle dot-grid or millimeter graph paper pattern for print configuration preview sections.",
+    "qr_poster_generator": "Real printable SVG QR code with customizable cybercafé title, instructions ('Scannez, Déposez vos fichiers, Récupérez au comptoir') with print-friendly CSS @media print styling.",
+    "status_pills": "High-contrast status badges in French: 'En attente' (Amber), 'En impression' (Blue pulsant), 'Prête' (Green), 'Retirée' (Slate), 'Annulée' (Rose)."
+  },
+  "media": {
+    "image_urls": {
+      "customer_scanning_qr": "https://images.unsplash.com/photo-1595079676339-1534801ad6cf?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzV8MHwxfHNlYXJjaHwxfHxwZXJzb24lMjBzY2FubmluZyUyMHFyJTIwY29kZSUyMHBob25lfGVufDB8fHx8MTc5Mzk5MjczMHww&ixlib=rb-4.1.0&q=85",
+      "mobile_payment_counter": "https://images.unsplash.com/photo-1571867424488-4565932edb41?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzV8MHwxfHNlYXJjaHwzfHxwZXJzb24lMjBzY2FubmluZyUyMHFyJTIwY29kZSUyMHBob25lfGVufDB8fHx8MTc5Mzk5MjczMHww&ixlib=rb-4.1.0&q=85",
+      "shop_counter_atmosphere": "https://images.unsplash.com/photo-1753351050724-511764d227e3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDJ8MHwxfHNlYXJjaHwzfHxjb2ZmZWUlMjBzaG9wJTIwY291bnRlciUyMHBheW1lbnR8ZW58MHx8fHwxNzkzOTkyNzM2fDA&ixlib=rb-4.1.0&q=85"
+    }
+  },
+  "french_terminology": {
+    "order_statuses": {
+      "pending": "En attente",
+      "printing": "En impression",
+      "ready": "Prête",
+      "picked_up": "Retirée",
+      "cancelled": "Annulée"
+    },
+    "payment_statuses": {
+      "pending": "Non payé",
+      "paid_online": "Payé en ligne",
+      "paid_counter": "Payé au comptoir"
+    },
+    "printing_options": {
+      "bw": "Noir & Blanc (N&B)",
+      "color": "Couleur",
+      "duplex_simplex": "Recto seul",
+      "duplex_both": "Recto-Verso",
+      "copies": "Nombre d'exemplaires",
+      "page_ranges": "Pages spécifiques (ex: 1-5, 8)",
+      "paper_sizes": "Formats de papier (A4, A3, A5, Letter, Legal)"
+    },
+    "roles": {
+      "owner": "Propriétaire",
+      "manager": "Gérant",
+      "operator": "Opérateur / Employé",
+      "superadmin": "Super Administrateur"
+    }
+  },
+  "motion": {
+    "transitions": "transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease",
+    "spring_physics": "stiffness: 300, damping: 25",
+    "reduced_motion": "All animations must respect prefers-reduced-motion media queries"
+  },
+  "accessibility": {
+    "contrast_standard": "WCAG AA (4.5:1 minimum for all text on background)",
+    "data_testids": "Mandatory on all buttons, forms, status pills, inputs, qr displays and modal triggers (e.g. data-testid='upload-dropzone', data-testid='order-status-badge', data-testid='mark-paid-button')"
+  },
+  "instructions_to_main_agent": [
+    "Default language of the entire UI and notifications MUST be French with accurate print and shop terminology.",
+    "All monetary amounts MUST be formatted with European standard format: e.g. 0,15 € or 12,50 € (never $ or USD).",
+    "Implement the 3 distinct application experiences: 1) Public & Customer portal (/s/:shopSlug and /suivi/:orderCode), 2) Cybercafé owner/staff operational dashboard (/dashboard, /orders, /settings, /printers, /team, /qr-poster), 3) Super-Admin platform control (/superadmin).",
+    "Customer portal (/s/:shopSlug) must be mobile-first optimized with seamless document drag/drop or file selection, live server-based price calculator in EUR, instant order generation, and real-time tracking link.",
+    "Provide interactive printable QR poster generator with ready-to-print CSS styling for shop counters.",
+    "Include seeded mock shops (e.g. 'CyberCafé Bastille Paris', 'CopyPrint Lyon Bellecour', 'Atelier Numérique Nantes') with realistic past and pending orders, printer list, and customized pricing schemes."
+  ]
+}

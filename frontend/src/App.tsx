@@ -1,0 +1,41 @@
+import { Routes, Route } from "react-router-dom";
+import { Toaster } from "@/components/ui/sonner";
+import DashboardLayout from "@/components/DashboardLayout";
+import Landing from "@/pages/Landing";
+import Login from "@/pages/Login";
+import Register from "@/pages/Register";
+import CustomerPortal from "@/pages/CustomerPortal";
+import Tracking from "@/pages/Tracking";
+import SuperAdmin from "@/pages/SuperAdmin";
+import Orders from "@/pages/dashboard/Orders";
+import Pricing from "@/pages/dashboard/Pricing";
+import ShopSettings from "@/pages/dashboard/ShopSettings";
+import Team from "@/pages/dashboard/Team";
+import Audit from "@/pages/dashboard/Audit";
+
+// One <Route> per page in src/pages; BrowserRouter already wraps this in main.tsx.
+export default function App() {
+  return (
+    <>
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/connexion" element={<Login />} />
+        <Route path="/inscription" element={<Register />} />
+        <Route path="/s/:slug" element={<CustomerPortal />} />
+        <Route path="/suivi" element={<Tracking />} />
+        <Route path="/suivi/:code" element={<Tracking />} />
+        <Route path="/superadmin" element={<SuperAdmin />} />
+        <Route path="/dashboard" element={<DashboardLayout />}>
+          <Route index element={<Orders />} />
+          <Route path="tarifs" element={<Pricing />} />
+          <Route path="boutique" element={<ShopSettings />} />
+          <Route path="equipe" element={<Team />} />
+          <Route path="journal" element={<Audit />} />
+        </Route>
+        <Route path="*" element={<Landing />} />
+      </Routes>
+      <Toaster richColors />
+    </>
+  );
+}
