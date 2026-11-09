@@ -213,3 +213,11 @@ export interface ScanSessionOut extends ScanSessionIn {
 }
 export interface ScanFinalizeIn { customer_name: string; customer_email: string | null }
 export interface ScanPublicOut { shop_name: string; filename: string; pages: number; kind: string; paid: boolean; available: boolean; first_download_at: string | null }
+
+// ---------- cash-up ----------
+export interface CashPaymentOut { at: string; order_code: string; service: string; method: string; amount_cents: number }
+export interface CashSummaryOut {
+  day: string; shop_id: string; shop_name: string; shop_address: string;
+  cash_cents: number; cash_count: number; card_cents: number; card_count: number; other_cents: number; other_count: number;
+  total_cents: number; total_count: number; payments: CashPaymentOut[]; generated_at: string;
+}

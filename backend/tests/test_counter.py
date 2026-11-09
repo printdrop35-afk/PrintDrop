@@ -135,3 +135,23 @@ def test_failed_deletion_is_retried(client):
         time.sleep(0.5)
     assert mongo.documents.find_one({"order_id": so["id"]})["status"] == "purged"
     assert o["status"] == "printing"  # unrelated order untouched
+
+
+def test_cash_summary_by_method(client):
+    owner, _ = fresh_owner()
+    shop = _shop(owner)
+    body = {"color": "bw", "paper_size": "A4", "duplex": False, "originals": 2, "copies": 1, "customer_name": ""}
+    ids = []
+    for method in ("cash", "cash", "card_terminal"):
+        o = owner.post(f"/shops/{shop['id']}/counter/copy", json=body).json()
+        owner.post(f"/orders/{o['id']}/status", json={"status": "ready"})
+        assert owner.post(f"/orders/{o['id']}/pay", json={"method": method}).status_code == 200
+        ids.append(o)
+    unit = ids[0]["total_cents"]
+    c = owner.get(f"/shops/{shop['id']}/reports/cash").json()
+    assert (c["cash_cents"], c["cash_count"]) == (2 * unit, 2)
+    assert (c["card_cents"], c["card_count"]) == (unit, 1)
+    assert c["total_cents"] == 3 * unit and len(c["payments"]) == 3 and c["payments"][0]["service"] == "copy"
+    assert owner.get(f"/shops/{shop['id']}/reports/cash?day=2099-01-01").status_code == 422
+    other, _ = fresh_owner()
+    assert other.get(f"/shops/{shop['id']}/reports/cash").status_code == 404

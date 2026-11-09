@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { CashSummary } from "@/components/CashSummary";
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Mail, Send } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -83,6 +84,8 @@ export default function Reports() {
         <Stat label="Travaux agent imprimés / échecs" value={r ? `${r.jobs_printed} / ${r.jobs_failed}` : "—"} testId="report-jobs" />
         <Stat label="Reste à encaisser" value={r ? formatEUR(r.unpaid_cents) : "—"} testId="report-unpaid" tone="text-rose-600" />
       </div>
+
+      <CashSummary shopId={shop.id} day={day} live={day === today} />
 
       <section className="rounded-2xl border bg-card p-5">
         <h2 className="text-lg font-semibold text-ink">Activité par heure</h2>

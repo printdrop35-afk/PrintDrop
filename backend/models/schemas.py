@@ -982,3 +982,29 @@ class ScanPublicOut(BaseModel):
     paid: bool
     available: bool
     first_download_at: datetime | None
+
+
+# ---------- cash-up (clôture de caisse) ----------
+class CashPaymentOut(BaseModel):
+    at: datetime
+    order_code: str
+    service: str
+    method: str
+    amount_cents: int
+
+
+class CashSummaryOut(BaseModel):
+    day: str
+    shop_id: str
+    shop_name: str
+    shop_address: str
+    cash_cents: int
+    cash_count: int
+    card_cents: int
+    card_count: int
+    other_cents: int  # online or any other method
+    other_count: int
+    total_cents: int
+    total_count: int
+    payments: list[CashPaymentOut]
+    generated_at: datetime

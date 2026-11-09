@@ -143,3 +143,8 @@ backend/tests/test_stage1.py — auth, pricing, upload validation, token binding
 - Pickup: customer code NO LONGER required for authenticated staff (confirm_code ignored); scan box only finds the order. Payment idempotent (409 on second).
 - Agent v0.3.0: WIA scanning (flatbed / feeder), scanners listed in heartbeat. UNTESTED on real hardware.
 - Tests: backend/tests/test_counter.py.
+
+## Clôture de caisse
+- GET /api/shops/{id}/reports/cash?day=YYYY-MM-DD (reports:read, Europe/Paris day): payments split cash / card_terminal / other, totals, every payment (time, order code, service, method, amount). 422 future day, 404 other tenant.
+- Reports page « Clôture de caisse » card (components/CashSummary.tsx), same day picker, live refresh today, « Imprimer la clôture » via printElement (logo + shop + date header).
+- Tests: test_counter.py::test_cash_summary_by_method.

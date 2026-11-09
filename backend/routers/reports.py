@@ -15,7 +15,7 @@ from lib.notify import NotifyError, send_email
 from lib.paper import paper_levels
 from lib.printing import is_online
 from lib.reports import build_daily, report_email, today_paris
-from models.schemas import AlertOut, DailyReportOut, PaperStockIn, PaperStockOut, ReportSettingsIn, ReportSettingsOut
+from models.schemas import AlertOut, CashSummaryOut, DailyReportOut, PaperStockIn, PaperStockOut, ReportSettingsIn, ReportSettingsOut
 from routers.dashboard import get_shop_or_404
 
 router = APIRouter(tags=["reports"])
@@ -198,3 +198,29 @@ async def cron_retention(authorization: str = Header(default="")):
     from lib.retention import run_retention
     asyncio.create_task(run_retention())
     return {"status": "accepted"}
+
+
+@router.get("/shops/{shop_id}/reports/cash", response_model=CashSummaryOut)
+async def cash_summary(shop_id: str, day: str | None = Query(default=None), p: Principal = Depends(require_tenant("reports:read"))):
+    """Clôture de caisse: payments recorded that day (Europe/Paris), split Espèce / Carte / autre. Read-only."""
+    from lib.authz import now_utc
+    from lib.reports import day_bounds
+    repo = tenant_repo(p)
+    shop = await get_shop_or_404(repo, shop_id)
+    d = parse_day(day)
+    start, end = day_bounds(d)
+    pays = await repo.find("payments", {"shop_id": shop_id, "created_at": {"$gte": start, "$lt": end}}, sort=[("created_at", 1)], limit=5000)
+    orders = {o["id"]: o for o in await repo.find("orders", {"id": {"$in": [x["order_id"] for x in pays]}}, limit=5000)} if pays else {}
+    tot = {"cash": [0, 0], "card_terminal": [0, 0], "other": [0, 0]}
+    rows = []
+    for x in pays:
+        k = x["method"] if x["method"] in ("cash", "card_terminal") else "other"
+        tot[k][0] += x["amount_cents"]
+        tot[k][1] += 1
+        o = orders.get(x["order_id"], {})
+        rows.append({"at": x["created_at"], "order_code": o.get("code", "?"), "service": o.get("service", "print"),
+                     "method": x["method"], "amount_cents": x["amount_cents"]})
+    return {"day": d.isoformat(), "shop_id": shop_id, "shop_name": shop["name"], "shop_address": shop.get("address", ""),
+            "cash_cents": tot["cash"][0], "cash_count": tot["cash"][1], "card_cents": tot["card_terminal"][0], "card_count": tot["card_terminal"][1],
+            "other_cents": tot["other"][0], "other_count": tot["other"][1],
+            "total_cents": sum(v[0] for v in tot.values()), "total_count": len(pays), "payments": rows, "generated_at": now_utc()}
