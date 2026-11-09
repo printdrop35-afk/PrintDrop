@@ -123,6 +123,21 @@ async def read_file(key: str) -> bytes:
     return resolve(key).read_bytes()  # legacy files written to local disk
 
 
+async def file_exists(key: str | None) -> bool:
+    if not key:
+        return False
+    if key.startswith(GRIDFS_PREFIX):
+        from lib.db import db
+        try:
+            return await db["files.files"].count_documents({"_id": _gridfs_id(key)}, limit=1) > 0
+        except StorageError:
+            return False
+    try:
+        return resolve(key).exists()
+    except StorageError:
+        return False
+
+
 async def delete_file(key: str) -> None:
     """Idempotent: an already-missing file is not an error. Real failures raise OSError so callers can retry."""
     if key.startswith(GRIDFS_PREFIX):

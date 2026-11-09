@@ -336,6 +336,23 @@ class OrderStatusIn(BaseModel):
     confirm_code: str = Field(default="", max_length=20)  # scanned/typed pickup code, required for picked_up
 
 
+class DocumentHealthOut(BaseModel):
+    document_id: str
+    available: bool  # False = file referenced by the order but missing from storage (lost) — not a pickup deletion
+
+
+class OrderDocumentsHealthOut(BaseModel):
+    documents: list[DocumentHealthOut]
+    resend_requested_at: datetime | None = None
+
+
+class ResendRequestOut(BaseModel):
+    sent_email: bool
+    sent_sms: bool
+    upload_url: str
+    resend_requested_at: datetime
+
+
 class OrderPayIn(BaseModel):
     method: Literal["cash", "card_terminal"]
 

@@ -79,6 +79,23 @@ export interface OrderPublicOut {
   documents_deleted: boolean;
 }
 
+export interface DocumentHealthOut {
+  document_id: string;
+  available: boolean;
+}
+
+export interface OrderDocumentsHealthOut {
+  documents: DocumentHealthOut[];
+  resend_requested_at: string | null;
+}
+
+export interface ResendRequestOut {
+  sent_email: boolean;
+  sent_sms: boolean;
+  upload_url: string;
+  resend_requested_at: string;
+}
+
 export interface OrderOut {
   id: string; code: string; shop_id: string; service?: "print" | "copy" | "scan"; delivery_token?: string | null; scan_downloaded_at?: string | null; shop_name: string; customer_name: string; customer_phone: string;
   customer_email: string | null; notify: boolean; note: string; lines: QuoteLine[]; total_cents: number;

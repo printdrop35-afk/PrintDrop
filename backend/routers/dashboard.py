@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 
 from lib.authz import ROLE_RANK, Principal, TenantRepo, audit, now_utc, request_origin, require_tenant, tenant_repo
-from lib.notify import enqueue_ready
+from lib.notify import NotifyError, enqueue_ready, resend_email, resend_sms, send_email, send_sms, to_e164, twilio_configured
 from lib.retention import purge_order
 from lib.billing import enforce_limit
 from lib.platform import shop_vat_bp
@@ -17,13 +17,13 @@ from lib.pricing import PAPER_LABELS, SERVICE_CATEGORIES, UNIT_LABELS, ht_from_t
 from lib.db import db
 from lib.security import hash_password
 from models.schemas import (
-    AuditOut, DownloadLinkOut, OrderOut, OrderPayIn, OrderStatusIn, Pricing, ShopCreateIn, ShopOut,
+    AuditOut, DocumentHealthOut, DownloadLinkOut, OrderDocumentsHealthOut, OrderOut, OrderPayIn, ResendRequestOut, OrderStatusIn, Pricing, ShopCreateIn, ShopOut,
     ShopStatsOut, ShopUpdateIn, StaffCreateIn, StaffOut, StaffUpdateIn,
 )
 from routers.auth import new_shop_doc, unique_slug
 
 from typing import Literal
-from lib.storage import MEDIA_TYPES, StorageError, extract_pages, read_file
+from lib.storage import MEDIA_TYPES, StorageError, extract_pages, file_exists, read_file
 from lib.pricing import parse_page_range
 import logging
 logger = logging.getLogger(__name__)
@@ -247,6 +247,62 @@ async def record_counter_payment(order_id: str, body: OrderPayIn, p: Principal =
     await audit("payment.counter", principal=p, resource_type="order", resource_id=order_id,
                 details={"code": order["code"], "amount_cents": order["total_cents"], "method": body.method})
     return await get_order_or_404(repo, order_id)
+
+
+async def _documents_health(repo: TenantRepo, order: dict) -> list[DocumentHealthOut]:
+    out = []
+    for line in order["lines"]:
+        if line.get("kind") != "print" or not line.get("document_id"):
+            continue
+        doc = await repo.find_one("documents", {"id": line["document_id"], "order_id": order["id"]})
+        ok = bool(doc and doc.get("status") != "purged" and await file_exists(doc.get("storage_key")))
+        out.append(DocumentHealthOut(document_id=line["document_id"], available=ok))
+    return out
+
+
+@router.get("/orders/{order_id}/documents/health", response_model=OrderDocumentsHealthOut)
+async def documents_health(order_id: str, p: Principal = Depends(require_tenant("documents:read"))):
+    """Is each document's file really in storage? Lets staff spot files lost before the durable-storage fix."""
+    repo = tenant_repo(p)
+    order = await get_order_or_404(repo, order_id)
+    if order.get("purged_at"):
+        return OrderDocumentsHealthOut(documents=[], resend_requested_at=order.get("resend_requested_at"))
+    return OrderDocumentsHealthOut(documents=await _documents_health(repo, order), resend_requested_at=order.get("resend_requested_at"))
+
+
+@router.post("/orders/{order_id}/request-resend", response_model=ResendRequestOut)
+async def request_resend(order_id: str, request: Request, p: Principal = Depends(require_tenant("orders:update"))):
+    """Ask the customer (e-mail and/or SMS) to send again a document whose file was lost. Returns the upload link
+    so staff can also pass it on by phone when the customer left no contact."""
+    repo = tenant_repo(p)
+    order = await get_order_or_404(repo, order_id)
+    if order["status"] in ("picked_up", "cancelled") or order.get("purged_at"):
+        raise HTTPException(status_code=409, detail="Commande terminée")
+    if all(d.available for d in await _documents_health(repo, order)):
+        raise HTTPException(status_code=409, detail="Les documents de cette commande sont disponibles")
+    shop = await repo.find_one("shops", {"id": order["shop_id"]})
+    base = (order.get("public_origin") or request_origin(request)).rstrip("/")
+    link = f"{base}/s/{shop['slug'] if shop else ''}"
+    sent_email = sent_sms = False
+    if order.get("customer_email"):
+        try:
+            subject, html = resend_email(order, link)
+            await send_email(to=order["customer_email"], subject=subject, html=html)
+            sent_email = True
+        except (NotifyError, ValueError) as exc:
+            logger.warning("request_resend email for %s: %s", order_id, exc)
+    e164 = to_e164(order.get("customer_phone") or "") if order.get("customer_phone") else None
+    if e164 and twilio_configured():
+        try:
+            await send_sms(to=e164, body=resend_sms(order, link))
+            sent_sms = True
+        except NotifyError as exc:
+            logger.warning("request_resend sms for %s: %s", order_id, exc)
+    now = now_utc()
+    await repo.update_one("orders", {"id": order_id}, {"$set": {"resend_requested_at": now, "updated_at": now}})
+    await audit("order.resend_requested", principal=p, resource_type="order", resource_id=order_id,
+                details={"code": order["code"], "email": sent_email, "sms": sent_sms})
+    return ResendRequestOut(sent_email=sent_email, sent_sms=sent_sms, upload_url=link, resend_requested_at=now)
 
 
 @router.post("/orders/{order_id}/documents/{doc_id}/link", response_model=DownloadLinkOut)

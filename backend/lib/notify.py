@@ -198,6 +198,30 @@ def ready_email(order: dict, link: str) -> tuple[str, str]:
     return subject, html
 
 
+def resend_email(order: dict, link: str) -> tuple[str, str]:
+    subject = f"Merci de renvoyer votre document — commande {order['code']} · {order['shop_name']}"
+    html = (
+        '<table role="presentation" width="100%" style="background:#F8FAFC"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#0F172A">'
+        '<table role="presentation" width="100%" style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #E2E8F0;border-radius:12px">'
+        '<tr><td style="padding:24px">'
+        '<p style="font-size:13px;color:#2563EB;font-weight:bold;letter-spacing:1px">PRINTDROP</p>'
+        f'<h1 style="font-size:22px;margin:8px 0">Bonjour {escape(order["customer_name"])},</h1>'
+        f'<p>Suite à un incident technique, le document de votre commande <strong>{escape(order["code"])}</strong> '
+        f'n\'a pas pu être récupéré par <strong>{escape(order["shop_name"])}</strong>. Nous vous prions de nous en excuser.</p>'
+        '<p>Merci de bien vouloir le renvoyer en quelques secondes :</p>'
+        f'<p style="margin:24px 0"><a href="{escape(link)}" style="background:#2563EB;color:#ffffff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:bold">Renvoyer mon document</a></p>'
+        '<p style="font-size:12px;color:#64748B">Message envoyé par PrintDrop pour le compte de la boutique. '
+        'Nous ne vous demanderons jamais de mot de passe ni de coordonnées bancaires par e-mail.</p>'
+        '</td></tr></table></td></tr></table>'
+    )
+    return subject, html
+
+
+def resend_sms(order: dict, link: str) -> str:
+    return (f"PrintDrop: suite a un incident, le document de votre commande {order['code']} chez {order['shop_name']} "
+            f"n'a pas pu etre recupere. Merci de le renvoyer ici: {link}")
+
+
 def ready_sms(order: dict, link: str) -> str:
     total = f"{order['total_cents'] / 100:.2f}".replace(".", ",")
     pay = f" A regler: {total} EUR." if order["payment_status"] == "unpaid" else ""

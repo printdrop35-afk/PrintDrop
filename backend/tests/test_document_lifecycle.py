@@ -57,3 +57,20 @@ def test_documents_survive_local_disk_loss_and_live_until_pickup(client):
     assert owner.get(f"/orders/{a['id']}/documents/{da}/file").status_code == 410
     assert page_ids(owner.get(f"/orders/{b['id']}/documents/{db_}/file?variant=print").content) == [1, 2]
     owner.post(f"/agents/{data['agent_id']}/revoke")
+
+
+def test_lost_file_detected_and_resend_request(client):
+    owner, slug = fresh_owner()
+    o = find_order(owner, order_with(client, slug, email="perdu@example.com")["code"])
+    doc = o["lines"][0]["document_id"]
+    h = owner.get(f"/orders/{o['id']}/documents/health").json()
+    assert h["documents"] == [{"document_id": doc, "available": True}] and h["resend_requested_at"] is None
+    assert owner.post(f"/orders/{o['id']}/request-resend").status_code == 409  # nothing lost
+    # simulate a file lost by the old ephemeral disk
+    mdb.documents.update_one({"id": doc}, {"$set": {"storage_key": "org/shop/disparu.pdf"}})
+    assert owner.get(f"/orders/{o['id']}/documents/health").json()["documents"][0]["available"] is False
+    r = owner.post(f"/orders/{o['id']}/request-resend")
+    assert r.status_code == 200, r.text
+    assert r.json()["upload_url"].endswith(f"/s/{slug}")
+    assert owner.get(f"/orders/{o['id']}/documents/health").json()["resend_requested_at"]
+    assert client.post(f"/orders/{o['id']}/request-resend").status_code in (401, 403)
