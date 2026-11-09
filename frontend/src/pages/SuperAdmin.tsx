@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Logo } from "@/components/Logo";
 import { AdminBilling, SubscriptionCell } from "@/components/AdminBilling";
 import { AgentReleaseAdmin } from "@/components/AgentReleaseAdmin";
-import { ContactInbox } from "@/components/ContactInbox";
+import { ContactInbox, NewMessagesBadge } from "@/components/ContactInbox";
 import { useMe } from "@/hooks/useMe";
 import { apiGet, apiPatch, errorMessage } from "@/lib/api";
 import { endSession } from "@/lib/session";
@@ -51,7 +51,10 @@ export default function SuperAdmin() {
       <header className="bg-ink text-white">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 sm:px-8">
           <div className="flex items-center gap-3"><Logo inverse /><span className="rounded-full bg-amber-400/15 px-2.5 py-0.5 text-xs font-semibold text-amber-300">Super-admin</span></div>
+          <div className="flex items-center gap-4">
+          <NewMessagesBadge />
           <button type="button" onClick={() => endSession("/login")} className="inline-flex items-center gap-2 text-sm text-slate-300 transition-colors hover:text-white" data-testid="admin-logout-button"><LogOut className="size-4" /> Déconnexion</button>
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-7xl space-y-8 px-5 py-8 sm:px-8">

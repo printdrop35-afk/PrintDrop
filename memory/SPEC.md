@@ -106,3 +106,9 @@ backend/tests/test_stage1.py — auth, pricing, upload validation, token binding
 ## Contact inbox & legal cleanup
 - GET /api/admin/contact-messages (platform:read, newest first, IP hidden), PATCH /api/admin/contact-messages/{id} {handled} (platform:manage, audited platform.contact_handled). UI: SuperAdmin « Messages du site » (À traiter / Démos / Tous, reply by mailto, mark handled).
 - Legal pages: owner asked NOT to show legal form, capital, VAT, publication director, hosting provider, nor a recipients/subprocessors section — removed (not placeholders).
+
+## Retention countdown, message badge, Word on prod, footer
+- OrderPublicOut.documents_delete_at / documents_days_left (created_at + RETENTION_DAYS, server clock) on create + track; Tracking page « N jours avant la suppression automatique ».
+- SuperAdmin header « Messages » badge (unhandled count, polled 30 s, toast on new arrival) → #messages-du-site.
+- Word → PDF: lib/storage.convert_docx → ConvertAPI EU (CONVERTAPI_TOKEN, CONVERTAPI_BASE_URL default https://eu-v2.convertapi.com, StoreFile=false, in-memory) when the token is set; otherwise local LibreOffice (preview). French errors on 401/403/5003.
+- Footer « Informations » column: Contact link only (legal pages still reachable by URL, no longer linked).

@@ -15,7 +15,12 @@ from lib.platform import shop_vat_bp
 from lib.pricing import finalize, price_extras, price_print, price_services, public_pricing
 from lib.security import new_secret_token, sha256, verify_file_link
 import asyncio
-from lib.storage import MEDIA_TYPES, docx_to_pdf, MAX_BYTES, StorageError, count_pages, detect_kind, resolve, save_file
+import math
+from datetime import timedelta
+
+from lib.authz import now_utc
+from lib.retention import RETENTION_DAYS
+from lib.storage import MEDIA_TYPES, convert_docx, MAX_BYTES, StorageError, count_pages, detect_kind, resolve, save_file
 from models.schemas import (
     DocumentUploadOut, OrderCreateIn, OrderPublicOut, PublicShopOut, QuoteIn, QuoteOut, TrackIn,
 )
@@ -76,7 +81,7 @@ async def upload_document(slug: str, file: UploadFile = File(...)):
     try:
         kind = detect_kind(data)
         if kind == "docx":
-            data = await asyncio.to_thread(docx_to_pdf, data)
+            data = await convert_docx(data)
             kind = "pdf"
         pages = count_pages(data, kind)
     except StorageError as exc:
@@ -145,7 +150,7 @@ async def create_order(slug: str, body: OrderCreateIn, request: Request):
     await db.orders.insert_one(dict(order))
     await audit("order.create", org_id=shop["org_id"], resource_type="order", resource_id=order_id,
                 details={"code": code, "total_cents": total, "shop_id": shop["id"]})
-    return order
+    return with_retention(order)
 
 
 @router.post("/public/orders/track", response_model=OrderPublicOut)
@@ -153,7 +158,14 @@ async def track(body: TrackIn):
     order = await db.orders.find_one({"code": body.code.strip().upper()}, {"_id": 0})
     if not order or not secrets.compare_digest(order["phone_digits"], phone_digits(body.phone)):
         raise HTTPException(status_code=404, detail="Aucune commande ne correspond à ce code et ce numéro")
-    return order
+    return with_retention(order)
+
+
+def with_retention(order: dict) -> dict:
+    """Adds the date/days left before the customer's documents are erased (server clock, see lib/retention.py)."""
+    delete_at = order["created_at"] + timedelta(days=RETENTION_DAYS)
+    left = (delete_at - now_utc()).total_seconds() / 86400
+    return {**order, "documents_delete_at": delete_at, "documents_days_left": max(0, math.ceil(left))}
 
 
 @router.get("/files/{doc_id}")

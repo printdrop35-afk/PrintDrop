@@ -290,6 +290,8 @@ class OrderPublicOut(BaseModel):
     currency: str
     created_at: datetime
     history: list[StatusEvent]
+    documents_delete_at: datetime | None = None  # erased at pickup/cancel, at the latest at this date
+    documents_days_left: int | None = None
 
 
 # ---------- orders (dashboard) ----------

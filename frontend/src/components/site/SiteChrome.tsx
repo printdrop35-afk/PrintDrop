@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
-import { COMPANY, COMPANY_PENDING, LEGAL_LINKS, formatSiren } from "@/lib/brand";
+import { COMPANY, COMPANY_PENDING, formatSiren } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -73,9 +73,6 @@ export function SiteFooter() {
         <div>
           <h2 className="text-xs font-semibold tracking-[0.15em] text-white uppercase">Informations</h2>
           <ul className="mt-4 space-y-2 text-sm">
-            {LEGAL_LINKS.map((l) => (
-              <li key={l.slug}><Link to={`/${l.slug}`} className="transition-colors hover:text-white" data-testid={`footer-link-${l.slug}`}>{l.label}</Link></li>
-            ))}
             <li><Link to={"/contact"} className="transition-colors hover:text-white" data-testid="footer-link-contact">Contact</Link></li>
           </ul>
         </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CheckCircle2, Inbox, Mail, RotateCcw } from "lucide-react";
@@ -34,7 +34,7 @@ export function ContactInbox() {
   const list = all.filter((m) => (filter === "open" ? !m.handled : filter === "demo" ? m.kind === "demo" : true));
 
   return (
-    <section className="rounded-2xl border bg-card p-5" data-testid="admin-contact-inbox">
+    <section id="messages-du-site" className="scroll-mt-6 rounded-2xl border bg-card p-5" data-testid="admin-contact-inbox">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Inbox className="size-5 text-azure" />
@@ -88,5 +88,31 @@ export function ContactInbox() {
         </ul>
       )}
     </section>
+  );
+}
+
+/** Header badge: unhandled contact/demo requests, polled every 30 s; a toast announces each new arrival. */
+export function NewMessagesBadge() {
+  const q = useQuery({ queryKey: ["admin-contact"], queryFn: () => apiGet<ContactMessageOut[]>("/admin/contact-messages"), refetchInterval: 30000 });
+  const list = q.isError ? [] : q.data ?? [];
+  const open = list.filter((m) => !m.handled);
+  const seen = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!q.data) return;
+    const ids = new Set(q.data.map((m) => m.id));
+    if (seen.current) {
+      const fresh = q.data.filter((m) => !seen.current!.has(m.id));
+      if (fresh.length) toast.info(fresh.length === 1 ? `Nouveau message : ${fresh[0].subject}` : `${fresh.length} nouveaux messages du site`);
+    }
+    seen.current = ids;
+  }, [q.data]);
+  return (
+    <a href="#messages-du-site" className="relative inline-flex items-center gap-2 text-sm text-slate-300 transition-colors hover:text-white" data-testid="admin-messages-badge"
+      aria-label={`${open.length} message(s) à traiter`}>
+      <Inbox className="size-4" /> Messages
+      {open.length > 0 && (
+        <span className="grid min-w-5 place-items-center rounded-full bg-[#08BBD0] px-1.5 text-[11px] font-bold text-[#042F2E]" data-testid="admin-messages-count">{open.length}</span>
+      )}
+    </a>
   );
 }

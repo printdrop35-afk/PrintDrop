@@ -106,3 +106,54 @@ def delete_file(key: str) -> None:
         resolve(key).unlink(missing_ok=True)
     except StorageError:
         pass
+
+
+def _convertapi_token() -> str:
+    """CONVERTAPI_TOKEN may be the bare token or a full ConvertAPI request URL copied from their dashboard (…?auth=TOKEN)."""
+    raw = os.environ.get("CONVERTAPI_TOKEN", "").strip().strip('"').strip("'")
+    if raw.lower().startswith("http"):
+        from urllib.parse import parse_qs, urlparse
+        q = {k.lower(): v[0] for k, v in parse_qs(urlparse(raw).query).items() if v}
+        return q.get("auth") or q.get("secret") or q.get("token") or ""
+    return raw
+
+
+async def convert_docx(data: bytes, filename: str = "document.docx") -> bytes:
+    """Word -> PDF. Production: ConvertAPI (EU endpoint, in-memory, StoreFile=false). Fallback: local LibreOffice (preview)."""
+    import asyncio
+    import httpx
+    token = _convertapi_token()
+    if not token:
+        return await asyncio.to_thread(docx_to_pdf, data)
+    base = os.environ.get("CONVERTAPI_BASE_URL", "https://eu-v2.convertapi.com").rstrip("/")
+    timeout = httpx.Timeout(connect=10.0, read=140.0, write=60.0, pool=10.0)
+    for delay in (0, 5, 10):
+        if delay:
+            await asyncio.sleep(delay)
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                r = await client.post(
+                    f"{base}/convert/docx/to/pdf",
+                    headers={"Authorization": f"Bearer {token}", "Accept": "application/octet-stream"},
+                    data={"StoreFile": "false", "Timeout": "120"},
+                    files={"File": ("document.docx", data, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+                )
+        except httpx.HTTPError as exc:
+            raise StorageError("Service de conversion Word momentanément indisponible — réessayez ou envoyez un PDF") from exc
+        if r.status_code == 503:
+            continue
+        if r.status_code in (401, 402, 403):
+            raise StorageError("Conversion Word indisponible pour le moment — enregistrez votre document en PDF puis réessayez")
+        if r.is_error:
+            code = 0
+            try:
+                code = int(r.json().get("Code", 0))
+            except (ValueError, TypeError, AttributeError):
+                pass
+            if code == 5003:
+                raise StorageError("Ce document Word est protégé par un mot de passe")
+            raise StorageError("Ce document Word n'a pas pu être converti — enregistrez-le en PDF puis réessayez")
+        if not r.content.startswith(b"%PDF-"):
+            raise StorageError("Réponse de conversion invalide — réessayez ou envoyez un PDF")
+        return r.content
+    raise StorageError("Service de conversion Word occupé — réessayez dans un instant")

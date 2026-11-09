@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Check, CircleX, RefreshCw } from "lucide-react";
+import { Check, CircleX, RefreshCw, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -92,6 +92,21 @@ export default function Tracking() {
                 </ol>
               )}
             </div>
+
+            {order.status !== "cancelled" && order.status !== "picked_up" && order.documents_days_left !== null && order.documents_delete_at && (
+              <div className="flex gap-3 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950" data-testid="track-retention">
+                <Clock className="mt-0.5 size-5 shrink-0 text-azure" />
+                <p>
+                  {order.documents_days_left > 0 ? (
+                    <><strong data-testid="track-retention-days">{order.documents_days_left} jour{order.documents_days_left > 1 ? "s" : ""}</strong> avant la suppression automatique de vos documents
+                    (le {formatDateTime(order.documents_delete_at)}).</>
+                  ) : (
+                    <strong data-testid="track-retention-days">Vos documents vont être supprimés automatiquement.</strong>
+                  )}{" "}
+                  Ils sont aussi supprimés, avec votre nom et votre téléphone, dès que vous retirez votre commande.
+                </p>
+              </div>
+            )}
 
             <div className={cn("flex items-center justify-between rounded-2xl p-5", order.payment_status === "unpaid" ? "bg-ink text-white" : "border bg-emerald-50 text-emerald-900")} data-testid="track-payment-banner">
               <div>

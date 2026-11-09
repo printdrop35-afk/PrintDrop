@@ -75,6 +75,7 @@ export interface OrderPublicOut {
   code: string; shop_name: string; shop_slug: string; status: OrderStatus; payment_status: PaymentStatus;
   lines: QuoteLine[]; total_cents: number; total_ht_cents: number | null; vat_cents: number | null; vat_rate_bp: number | null;
   discount_cents: number; currency: string; created_at: string; history: StatusEvent[];
+  documents_delete_at: string | null; documents_days_left: number | null;
 }
 
 export interface OrderOut {
