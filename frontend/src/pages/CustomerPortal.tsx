@@ -52,7 +52,7 @@ function Segmented<T extends string>({ value, options, onChange, testId }: { val
   );
 }
 
-function DocCard({ doc, index, onChange, onRemove, lineCents, sizes }: { doc: CartDoc; index: number; onChange: (o: PrintOptions) => void; onRemove: () => void; lineCents?: number; sizes: PaperSize[] }) {
+function DocCard({ doc, index, onChange, onRemove, lineCents, selected, sizes }: { doc: CartDoc; index: number; onChange: (o: PrintOptions) => void; onRemove: () => void; lineCents?: number; selected?: number[] | null; sizes: PaperSize[] }) {
   const o = doc.options;
   const set = (patch: Partial<PrintOptions>) => onChange({ ...o, ...patch });
   const isPdf = doc.upload.kind === "pdf";
@@ -67,6 +67,12 @@ function DocCard({ doc, index, onChange, onRemove, lineCents, sizes }: { doc: Ca
           <p className="text-xs text-muted-foreground" data-testid={`doc-card-${index}-pages`}>
             {doc.upload.page_count} page{doc.upload.page_count > 1 ? "s" : ""} · {(doc.upload.size_bytes / 1024 / 1024).toFixed(2)} Mo
           </p>
+          {isPdf && selected && (
+            <p className="mt-0.5 text-xs font-semibold text-azure" data-testid={`doc-card-${index}-selected`}>
+              {selected.length} page{selected.length > 1 ? "s" : ""} sélectionnée{selected.length > 1 ? "s" : ""} sur {doc.upload.page_count}
+              {o.page_range ? ` (${selected.join(", ")})` : ""}
+            </p>
+          )}
         </div>
         <div className="text-right">
           <p className="font-mono text-sm font-semibold text-ink" data-testid={`doc-card-${index}-price`}>{lineCents !== undefined ? formatEUR(lineCents) : "—"}</p>
@@ -98,7 +104,7 @@ function DocCard({ doc, index, onChange, onRemove, lineCents, sizes }: { doc: Ca
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs text-slate-500">Pages à imprimer</Label>
-          <Input value={o.page_range} placeholder="Toutes (ex : 1-5, 8)" onChange={(e) => set({ page_range: e.target.value })}
+          <Input value={o.page_range} placeholder="Toutes (ex : 1-2, 4 ou 1,3)" onChange={(e) => set({ page_range: e.target.value })}
             disabled={!isPdf} className="h-10 bg-white" data-testid={`doc-card-${index}-range-input`} />
         </div>
         <label className="flex items-center gap-2.5 text-sm sm:col-span-2">
@@ -146,6 +152,7 @@ export default function CustomerPortal() {
   });
   const quote = hasSomething && !quoteQ.isError ? quoteQ.data : undefined;
   const lineFor = (docId: string) => quote?.lines.find((l) => l.document_id === docId)?.subtotal_cents;
+  const selectedFor = (docId: string) => quote?.lines.find((l) => l.document_id === docId)?.selected_pages ?? null;
 
   const onFiles = async (e: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -174,7 +181,8 @@ export default function CustomerPortal() {
     onError: (err) => toast.error(errorMessage(err, "Commande impossible")),
   });
 
-  const canSubmit = !!quote && quote.total_cents > 0 && name.trim().length >= 2 && phone.replace(/\D/g, "").length >= 6 && uploading === 0 && !quoteQ.isFetching;
+  const phoneOk = phone.trim() === "" || phone.replace(/\D/g, "").length >= 6; // phone is optional
+  const canSubmit = !!quote && quote.total_cents > 0 && name.trim().length >= 2 && phoneOk && uploading === 0 && !quoteQ.isFetching;
 
   const svc = (key: keyof ServicesIn, label: string, unit: number | undefined, Icon: typeof Copy) => (
     <div className="flex items-center justify-between gap-3 py-3">
@@ -230,7 +238,7 @@ export default function CustomerPortal() {
             <input ref={fileInput} type="file" multiple accept="application/pdf,image/png,image/jpeg,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="hidden" onChange={onFiles} data-testid="upload-file-input" />
 
             {docs.map((d, i) => (
-              <DocCard key={d.upload.id} doc={d} index={i} lineCents={lineFor(d.upload.id)} sizes={sizes}
+              <DocCard key={d.upload.id} doc={d} index={i} lineCents={lineFor(d.upload.id)} selected={selectedFor(d.upload.id)} sizes={sizes}
                 onChange={(options) => setDocs(docs.map((x, j) => (j === i ? { ...x, options } : x)))}
                 onRemove={() => setDocs(docs.filter((_, j) => j !== i))} />
             ))}
@@ -300,17 +308,18 @@ export default function CustomerPortal() {
                 <Input id="cname" value={name} onChange={(e) => setName(e.target.value)} className="h-11" autoComplete="name" data-testid="customer-name-input" />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="cphone">Téléphone <span className="text-xs text-muted-foreground">(sert à suivre votre commande)</span></Label>
+                <Label htmlFor="cphone">Téléphone <span className="text-xs text-muted-foreground">(facultatif)</span></Label>
                 <Input id="cphone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="h-11" autoComplete="tel" placeholder="06 12 34 56 78" data-testid="customer-phone-input" />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="cemail">E-mail <span className="text-xs text-muted-foreground">(facultatif)</span></Label>
+                <Label htmlFor="cemail">Adresse e-mail <span className="text-xs text-muted-foreground">(facultatif)</span></Label>
                 <Input id="cemail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-11" autoComplete="email" placeholder="vous@exemple.fr" data-testid="customer-email-input" />
               </div>
-              <label className="flex items-start gap-2.5 text-sm">
+              {!phoneOk && <p className="text-xs text-rose-600" data-testid="customer-phone-error">Numéro incomplet — corrigez-le ou laissez le champ vide.</p>}
+              {(phone.trim() || email.trim()) ? <label className="flex items-start gap-2.5 text-sm">
                 <Checkbox checked={notify} onCheckedChange={(c: boolean) => setNotify(c)} className="mt-0.5" data-testid="customer-notify-checkbox" />
-                <span>Me prévenir par SMS{email ? " et e-mail" : ""} quand ma commande est prête</span>
-              </label>
+                <span>Me prévenir {phone.trim() && email.trim() ? "par SMS et e-mail" : phone.trim() ? "par SMS" : "par e-mail"} quand ma commande est prête</span>
+              </label> : <p className="text-xs text-muted-foreground" data-testid="customer-no-contact-hint">Sans téléphone ni e-mail, suivez votre commande avec son code à 4 chiffres.</p>}
               <div className="space-y-1.5">
                 <Label htmlFor="cnote">Remarque (facultatif)</Label>
                 <Textarea id="cnote" value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="Ex : agrafer chaque exemplaire" data-testid="customer-note-input" />

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/Logo";
+import { PickupTicket } from "@/components/PickupTicket";
 import { PaymentBadge, StatusBadge } from "@/components/StatusBadge";
 import { apiPost, errorMessage } from "@/lib/api";
 import { formatDateTime, formatEUR, tk } from "@/i18n";
@@ -19,7 +20,7 @@ export default function Tracking() {
   const navigate = useNavigate();
   const [code, setCode] = useState(codeParam);
   const [phone, setPhone] = useState(() => (codeParam ? sessionStorage.getItem(`pd_track_${codeParam}`) ?? "" : ""));
-  const [query, setQuery] = useState<TrackIn | null>(() => (codeParam && phone ? { code: codeParam, phone } : null));
+  const [query, setQuery] = useState<TrackIn | null>(() => (codeParam ? { code: codeParam, phone } : null));
 
   const q = useQuery({
     queryKey: ["track", query],
@@ -49,14 +50,14 @@ export default function Tracking() {
           <h1 className="mt-1 text-3xl font-bold text-ink">Où en est mon impression ?</h1>
         </div>
 
-        <form onSubmit={submit} className="grid gap-3 rounded-2xl border bg-white p-4 shadow-sm sm:grid-cols-[1fr_1fr_auto] sm:items-end" data-testid="track-form">
+        <form onSubmit={submit} className="grid gap-3 rounded-2xl border bg-white p-4 shadow-sm sm:grid-cols-[1fr_1fr_auto] sm:items-end print:hidden" data-testid="track-form">
           <div className="space-y-1.5">
-            <Label htmlFor="tcode">Code de suivi</Label>
-            <Input id="tcode" value={code} onChange={(e) => setCode(e.target.value)} placeholder="PD-XXXXXX" required className="h-11 font-mono uppercase" data-testid="track-code-input" />
+            <Label htmlFor="tcode">Code de commande</Label>
+            <Input id="tcode" value={code} onChange={(e) => setCode(e.target.value)} placeholder="1234" inputMode="numeric" required className="h-11 font-mono uppercase" data-testid="track-code-input" />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="tphone">Téléphone</Label>
-            <Input id="tphone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required className="h-11" data-testid="track-phone-input" />
+            <Label htmlFor="tphone">Téléphone <span className="text-xs text-muted-foreground">(si vous l'avez donné)</span></Label>
+            <Input id="tphone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="h-11" data-testid="track-phone-input" />
           </div>
           <Button type="submit" className="h-11" data-testid="track-submit-button">Suivre</Button>
         </form>
@@ -93,20 +94,16 @@ export default function Tracking() {
               )}
             </div>
 
-            {order.status !== "cancelled" && order.status !== "picked_up" && order.documents_days_left !== null && order.documents_delete_at && (
-              <div className="flex gap-3 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950" data-testid="track-retention">
-                <Clock className="mt-0.5 size-5 shrink-0 text-azure" />
-                <p>
-                  {order.documents_days_left > 0 ? (
-                    <><strong data-testid="track-retention-days">{order.documents_days_left} jour{order.documents_days_left > 1 ? "s" : ""}</strong> avant la suppression automatique de vos documents
-                    (le {formatDateTime(order.documents_delete_at)}).</>
-                  ) : (
-                    <strong data-testid="track-retention-days">Vos documents vont être supprimés automatiquement.</strong>
-                  )}{" "}
-                  Ils sont aussi supprimés, avec votre nom et votre téléphone, dès que vous retirez votre commande.
-                </p>
-              </div>
-            )}
+            {order.status !== "cancelled" && order.status !== "picked_up" && <PickupTicket order={order} />}
+
+            <div className="flex gap-3 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950 print:hidden" data-testid="track-retention">
+              <Clock className="mt-0.5 size-5 shrink-0 text-azure" />
+              <p data-testid="track-retention-text">
+                {order.documents_deleted
+                  ? "Vos documents ont été supprimés de nos serveurs à la fin de la commande."
+                  : "Vos documents seront supprimés automatiquement de nos serveurs dès le retrait (ou l'annulation) de votre commande."}
+              </p>
+            </div>
 
             <div className={cn("flex items-center justify-between rounded-2xl p-5", order.payment_status === "unpaid" ? "bg-ink text-white" : "border bg-emerald-50 text-emerald-900")} data-testid="track-payment-banner">
               <div>

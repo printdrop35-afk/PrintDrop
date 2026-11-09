@@ -211,7 +211,7 @@ async def enqueue_ready(order: dict, origin: str) -> int:
         return 0
     base = order.get("public_origin") or origin
     link = f"{base.rstrip('/')}/suivi/{order['code']}"
-    channels = [("sms", order["customer_phone"])]
+    channels = [("sms", order["customer_phone"])] if order.get("customer_phone") else []
     if order.get("customer_email"):
         channels.append(("email", order["customer_email"]))
     queued = 0

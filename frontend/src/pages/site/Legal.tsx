@@ -47,8 +47,8 @@ function Confidentialite() {
       <p>Gérer les commandes d'impression, prévenir le client quand sa commande est prête (s'il l'a accepté), facturer l'abonnement des boutiques, répondre aux demandes de contact, sécuriser le service.</p>
       <h2>Durées de conservation</h2>
       <ul>
-        <li><strong>Documents envoyés par les clients</strong> : {COMPANY_PENDING.documentRetention}. Ils ne peuvent pas être téléchargés par la boutique : ils sont uniquement transmis à l'imprimante, et seules les pages choisies par le client sont envoyées.</li>
-        <li><strong>Nom, téléphone et e-mail du client</strong> : effacés en même temps que les documents. La commande reste conservée de façon anonyme (montant, date, statut) pour la comptabilité de la boutique.</li>
+        <li><strong>Documents envoyés par les clients</strong> : {COMPANY_PENDING.documentRetention}. Seul le personnel de la boutique y a accès ; seules les pages choisies par le client sont imprimées.</li>
+        <li><strong>Nom, téléphone et e-mail du client</strong> (téléphone et e-mail facultatifs) : conservés avec la commande (historique, paiement, retrait) pour la gestion et la comptabilité de la boutique.</li>
         <li><strong>Fichiers envoyés sans commande validée</strong> : supprimés au bout de 24 heures.</li>
         <li><strong>Codes d'appairage de l'agent</strong> : 24 heures maximum.</li>
         <li><strong>Messages du formulaire de contact</strong> : <Todo>durée de conservation</Todo>.</li>

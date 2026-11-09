@@ -6,7 +6,7 @@ import httpx
 from dotenv import load_dotenv
 
 from tests.conftest import API_URL
-from tests.test_agent_notify import drain, pair_agent
+from tests.test_agent_notify import start_print, drain, pair_agent
 from tests.test_stage1 import find_order, login, place_order, shop_id
 
 load_dotenv("/app/backend/.env")
@@ -45,7 +45,7 @@ def test_alerts_printer_offline_and_failed_job(client):
     drain(agent)
     order = place_order(client, "copyprint-bellecour")
     o = find_order(owner, order["code"])
-    owner.post(f"/orders/{o['id']}/status", json={"status": "printing"})
+    start_print(owner, o["id"], data["agent_id"])
     job = next(j for j in agent.post("/agent/jobs/claim").json()["jobs"] if j["order_code"] == order["code"])
     agent.post(f"/agent/jobs/{job['id']}/report", json={"lease_id": job["lease_id"], "status": "failed", "error": "Bourrage"})
     agent.post("/agent/heartbeat", json={"printers": [{"name": "Imprimante PC alertes", "status": "offline", "detail": "Hors ligne"}]})

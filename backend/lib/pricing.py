@@ -75,7 +75,7 @@ def parse_page_range(spec: str, page_count: int) -> list[int]:
         raise ValueError("Aucune page sélectionnée")
     if min(pages) < 1 or max(pages) > page_count:
         raise ValueError(f"Pages hors limites (le document contient {page_count} page(s))")
-    return sorted(set(pages))
+    return list(dict.fromkeys(pages))  # duplicates removed, customer's order preserved
 
 
 def _round(x: float) -> int:
@@ -85,7 +85,8 @@ def _round(x: float) -> int:
 def _line(kind: str, label: str, qty: int, unit: int, subtotal: int, sheets: int = 0, **extra) -> dict:
     return {"kind": kind, "label": label, "document_id": extra.get("document_id"), "filename": extra.get("filename"),
             "options": extra.get("options"), "pages": qty, "copies": extra.get("copies", 1), "sheets": sheets,
-            "unit_cents": unit, "subtotal_cents": subtotal}
+            "unit_cents": unit, "subtotal_cents": subtotal,
+            "document_pages": extra.get("document_pages"), "selected_pages": extra.get("selected_pages")}
 
 
 def price_print(pricing: dict, filename: str, document_id: str, page_count: int, opts: dict) -> dict:
@@ -106,7 +107,8 @@ def price_print(pricing: dict, filename: str, document_id: str, page_count: int,
     color_label = "Couleur" if opts["color"] == "color" else "N&B"
     duplex_label = "Recto-verso" if opts["duplex"] else "Recto"
     return _line("print", f"Impression {PAPER_LABELS[opts['paper_size']]} {color_label} · {duplex_label}", n, unit, subtotal,
-                 sheets=sheets, document_id=document_id, filename=filename, options=opts, copies=copies)
+                 sheets=sheets, document_id=document_id, filename=filename, options=opts, copies=copies,
+                 document_pages=page_count, selected_pages=pages)
 
 
 def price_services(pricing: dict, services: dict) -> list[dict]:

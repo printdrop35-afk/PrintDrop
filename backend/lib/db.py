@@ -40,7 +40,9 @@ INDEXES: dict[str, list[IndexModel]] = {
     ],
     "orders": [
         IndexModel([("id", ASCENDING)], name="id", unique=True),
-        IndexModel([("code", ASCENDING)], name="code", unique=True),
+        # 4-digit pickup codes are reused once an order is finished: uniqueness only while in progress (active_code)
+        IndexModel([("code", ASCENDING), ("created_at", DESCENDING)], name="code_lookup"),
+        IndexModel([("active_code", ASCENDING)], name="active_code", unique=True, partialFilterExpression={"active_code": {"$exists": True}}),
         IndexModel([("org_id", ASCENDING), ("shop_id", ASCENDING), ("status", ASCENDING), ("created_at", DESCENDING)], name="org_shop_status_created"),
     ],
     "payments": [

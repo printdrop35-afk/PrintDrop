@@ -232,8 +232,13 @@ class QuoteIn(BaseModel):
 
 class OrderCreateIn(QuoteIn):
     customer_name: str = Field(min_length=2, max_length=80)
-    customer_phone: str = Field(min_length=6, max_length=20)
-    customer_email: EmailStr | None = None
+    customer_phone: str = Field(default="", max_length=20)  # optional
+    customer_email: EmailStr | None = None  # optional
+
+    @field_validator("customer_email", mode="before")
+    @classmethod
+    def _empty_email(cls, v):
+        return None if isinstance(v, str) and not v.strip() else v
     notify: bool = True
     note: str = Field(default="", max_length=500)
 
@@ -249,6 +254,8 @@ class QuoteLine(BaseModel):
     sheets: int
     unit_cents: int
     subtotal_cents: int
+    document_pages: int | None = None  # page count of the original document (print lines)
+    selected_pages: list[int] | None = None  # exactly what is printed, in the customer's order
 
 
 class QuoteOut(BaseModel):
@@ -266,7 +273,7 @@ class QuoteOut(BaseModel):
 
 class TrackIn(BaseModel):
     code: str = Field(min_length=4, max_length=20)
-    phone: str = Field(min_length=6, max_length=20)
+    phone: str = Field(default="", max_length=20)  # required only if the order was placed with a phone
 
 
 class StatusEvent(BaseModel):
@@ -290,8 +297,7 @@ class OrderPublicOut(BaseModel):
     currency: str
     created_at: datetime
     history: list[StatusEvent]
-    documents_delete_at: datetime | None = None  # erased at pickup/cancel, at the latest at this date
-    documents_days_left: int | None = None
+    documents_deleted: bool = False  # files erased (pickup / cancellation)
 
 
 # ---------- orders (dashboard) ----------
@@ -319,11 +325,12 @@ class OrderOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     history: list[StatusEvent]
-    purged_at: datetime | None = None  # documents + customer identity erased (retention)
+    purged_at: datetime | None = None  # document files erased (pickup / cancellation); order data kept
 
 
 class OrderStatusIn(BaseModel):
     status: OrderStatus
+    confirm_code: str = Field(default="", max_length=20)  # scanned/typed pickup code, required for picked_up
 
 
 class OrderPayIn(BaseModel):

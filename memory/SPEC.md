@@ -112,3 +112,13 @@ backend/tests/test_stage1.py — auth, pricing, upload validation, token binding
 - SuperAdmin header « Messages » badge (unhandled count, polled 30 s, toast on new arrival) → #messages-du-site.
 - Word → PDF: lib/storage.convert_docx → ConvertAPI EU (CONVERTAPI_TOKEN, CONVERTAPI_BASE_URL default https://eu-v2.convertapi.com, StoreFile=false, in-memory) when the token is set; otherwise local LibreOffice (preview). French errors on 401/403/5003.
 - Footer « Informations » column: Contact link only (legal pages still reachable by URL, no longer linked).
+
+## Print workflow v3 (brief A–L) — supersedes "no downloads" and "7-day / anonymise" rules
+- Pickup/order code: 4 digits, unique among in-progress orders (orders.active_code + partial unique index; migration 003_pickup_codes dropped the old unique `code` index). Legacy PD-XXXXXX codes still tracked.
+- Customer contact: phone and email optional (name required). Tracking: code alone if the order has no phone, code + phone otherwise; 30 lookups / 10 min / IP.
+- QuoteLine.document_pages + selected_pages (customer order preserved, duplicates removed); price = selected pages × copies.
+- Staff (documents:read, cookie session) GET /api/orders/{id}/documents/{doc}/file?variant=original|print&disposition=attachment|inline — print = in-memory PDF of selected pages. POST …/link returns that URL. Never creates a print job.
+- No automatic printing: status changes never enqueue jobs; printing only via « IMPRIMER DIRECTEMENT » (confirmation step) or « Imprimer… » (system print dialog in a hidden iframe).
+- Pickup: picked_up requires confirm_code == order code (QR on ticket encodes it); mismatch → 409 + audit order.pickup_mismatch.
+- Retention: files deleted only when picked_up/cancelled (lib/retention.py); order data incl. name/phone/email kept; failures logged + retried by hourly cron; old links → 410.
+- Pickup ticket (components/PickupTicket.tsx): official logo, 4-digit code, QR, shop, prints alone (.pd-print-area).

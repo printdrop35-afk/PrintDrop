@@ -48,7 +48,19 @@ async def m002_subscriptions() -> None:
     }})
 
 
-MIGRATIONS = [("001_pricing_v2", m001_pricing_v2), ("002_subscriptions", m002_subscriptions)]
+async def m003_pickup_codes() -> None:
+    """4-digit pickup codes: drop the old globally-unique code index, mark in-progress orders with active_code."""
+    from pymongo import ASCENDING
+    info = await db.orders.index_information()
+    if "code" in info:
+        await db.orders.drop_index("code")
+    await db.orders.update_many({"status": {"$in": ["pending", "printing", "ready"]}, "active_code": {"$exists": False}},
+                                [{"$set": {"active_code": "$code"}}])
+    await db.orders.create_index([("active_code", ASCENDING)], name="active_code", unique=True,
+                                 partialFilterExpression={"active_code": {"$exists": True}})
+
+
+MIGRATIONS = [("001_pricing_v2", m001_pricing_v2), ("002_subscriptions", m002_subscriptions), ("003_pickup_codes", m003_pickup_codes)]
 
 
 async def run_migrations() -> list[str]:

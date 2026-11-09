@@ -64,6 +64,7 @@ export interface OrderCreateIn extends QuoteIn { customer_name: string; customer
 export interface QuoteLine {
   kind: "print" | "photocopy" | "scan" | "service" | "discount" | "minimum"; label: string; document_id: string | null; filename: string | null;
   options: PrintOptions | null; pages: number; copies: number; sheets: number; unit_cents: number; subtotal_cents: number;
+  document_pages?: number | null; selected_pages?: number[] | null;
 }
 export interface QuoteOut {
   lines: QuoteLine[]; subtotal_cents: number; discount_cents: number; total_cents: number; total_ht_cents: number;
@@ -75,7 +76,7 @@ export interface OrderPublicOut {
   code: string; shop_name: string; shop_slug: string; status: OrderStatus; payment_status: PaymentStatus;
   lines: QuoteLine[]; total_cents: number; total_ht_cents: number | null; vat_cents: number | null; vat_rate_bp: number | null;
   discount_cents: number; currency: string; created_at: string; history: StatusEvent[];
-  documents_delete_at: string | null; documents_days_left: number | null;
+  documents_deleted: boolean;
 }
 
 export interface OrderOut {
@@ -85,7 +86,7 @@ export interface OrderOut {
   payment_status: PaymentStatus; payment_method: string | null; paid_at: string | null;
   created_at: string; updated_at: string; history: StatusEvent[]; purged_at?: string | null;
 }
-export interface OrderStatusIn { status: OrderStatus }
+export interface OrderStatusIn { status: OrderStatus ; confirm_code?: string }
 export interface OrderPayIn { method: "cash" | "card_terminal" }
 export interface DownloadLinkOut { url: string; expires_at: number }
 export interface ShopStatsOut {

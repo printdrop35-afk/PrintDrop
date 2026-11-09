@@ -36,7 +36,7 @@ export const COMPANY_PENDING = {
   publicEmail: null as string | null, // e-mail affiché publiquement
   phone: null as string | null,
   host: null as string | null, // hébergeur : nom, adresse, téléphone
-  documentRetention: "supprimés dès que la commande est retirée ou annulée, et au plus tard 7 jours après la commande" as string | null,
+  documentRetention: "supprimés automatiquement dès que la commande est retirée ou annulée" as string | null,
 } as const;
 
 export const LEGAL_LINKS = [

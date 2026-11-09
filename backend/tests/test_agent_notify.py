@@ -21,6 +21,14 @@ def pair_agent(owner: httpx.Client, name: str = "PC test") -> tuple[dict, httpx.
     return data, agent
 
 
+def start_print(owner: httpx.Client, order_id: str, agent_id: str) -> None:
+    """Explicit « IMPRIMER DIRECTEMENT » on this agent's printer (a status change never prints)."""
+    prs = owner.get(f"/shops/{shop_id(owner)}/printers").json()
+    pid = next(p["id"] for p in prs if p["agent_id"] == agent_id)
+    r = owner.post(f"/orders/{order_id}/print-direct", json={"printer_id": pid, "dry_check": False})
+    assert r.status_code == 200 and r.json()["ok"], r.text
+
+
 def drain(agent: httpx.Client) -> None:
     """Finish any job left in the shop queue so each test starts clean."""
     for _ in range(10):
@@ -42,7 +50,7 @@ def test_full_agent_flow_and_no_duplicates(client):
     drain(agent)
     order = place_order(client)
     o = find_order(owner, order["code"])
-    assert owner.post(f"/orders/{o['id']}/status", json={"status": "printing"}).status_code == 200
+    start_print(owner, o["id"], data["agent_id"])
     jobs = owner.get(f"/orders/{o['id']}/print-jobs").json()
     assert len(jobs) == 1 and jobs[0]["status"] == "queued"
 
@@ -85,7 +93,7 @@ def test_requeue_when_printer_offline(client):
     drain(agent)
     order = place_order(client)
     o = find_order(owner, order["code"])
-    owner.post(f"/orders/{o['id']}/status", json={"status": "printing"})
+    start_print(owner, o["id"], data["agent_id"])
     job = None
     for _ in range(10):  # other tests may have older jobs queued in the same shop: skip past them
         batch = agent.post("/agent/jobs/claim").json()["jobs"]
@@ -115,7 +123,7 @@ def test_agent_isolation(client):
     drain(agent_a)
     order = place_order(client, BASTILLE)
     o = find_order(owner_a, order["code"])
-    owner_a.post(f"/orders/{o['id']}/status", json={"status": "printing"})
+    start_print(owner_a, o["id"], data_a["agent_id"])
     # Lyon's agent never sees Bastille's jobs
     assert all(j["order_code"] != order["code"] for j in agent_b.post("/agent/jobs/claim").json()["jobs"])
     job = next(j for j in agent_a.post("/agent/jobs/claim").json()["jobs"] if j["order_code"] == order["code"])

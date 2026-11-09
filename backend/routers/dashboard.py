@@ -10,7 +10,6 @@ from fastapi.responses import Response
 
 from lib.authz import ROLE_RANK, Principal, TenantRepo, audit, now_utc, request_origin, require_tenant, tenant_repo
 from lib.notify import enqueue_ready
-from lib.printing import enqueue_initial_jobs
 from lib.retention import purge_order
 from lib.billing import enforce_limit
 from lib.platform import shop_vat_bp
@@ -22,6 +21,12 @@ from models.schemas import (
     ShopStatsOut, ShopUpdateIn, StaffCreateIn, StaffOut, StaffUpdateIn,
 )
 from routers.auth import new_shop_doc, unique_slug
+
+from typing import Literal
+from lib.storage import MEDIA_TYPES, StorageError, extract_pages, resolve
+from lib.pricing import parse_page_range
+import logging
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["dashboard"])
 
@@ -184,24 +189,29 @@ async def change_status(order_id: str, body: OrderStatusIn, request: Request, p:
         raise HTTPException(status_code=409, detail=f"Transition impossible : {current} → {target}")
     if target == "picked_up" and order["payment_status"] == "unpaid":
         raise HTTPException(status_code=409, detail="Encaissez la commande avant de la marquer comme retirée")
+    if target == "picked_up" and body.confirm_code.strip().upper() != order["code"].upper():
+        # pickup validation: the code on the customer's ticket (scanned or typed) must match this order
+        await audit("order.pickup_mismatch", principal=p, resource_type="order", resource_id=order_id, outcome="deny",
+                    details={"code": order["code"], "given": body.confirm_code[:20]})
+        raise HTTPException(status_code=409, detail="Le code de retrait ne correspond pas à cette commande")
     now = now_utc()
     matched = await repo.update_one("orders", {"id": order_id, "status": current}, {
         "$set": {"status": target, "updated_at": now},
         "$push": {"history": {"status": target, "at": now, "by": p.name}},
+        **({"$unset": {"active_code": ""}} if target in ("picked_up", "cancelled") else {}),
     })
     if not matched:
         raise HTTPException(status_code=409, detail="La commande a été modifiée entre-temps, rechargez")
     await audit("order.status", principal=p, resource_type="order", resource_id=order_id,
                 details={"code": order["code"], "from": current, "to": target})
     updated = await get_order_or_404(repo, order_id)
-    if target == "printing" and current == "pending":
-        await enqueue_initial_jobs(updated, p.name)  # sent to the local agent, if one is paired
-    elif target == "ready":
+    # a status change never prints: printing only happens through an explicit, confirmed « Imprimer » action
+    if target == "ready":
         await enqueue_ready(updated, request_origin(request))
     elif target == "cancelled":
         await repo.update_many("print_jobs", {"order_id": order_id, "status": {"$in": ["queued", "claimed"]}},
                                {"$set": {"status": "cancelled", "updated_at": now}})
-    if target in ("picked_up", "cancelled"):  # retention: erase files + customer identity right away
+    if target in ("picked_up", "cancelled"):  # retention: delete the document files right away (order data kept)
         await purge_order(order_id)
         updated = await get_order_or_404(repo, order_id)
     return updated
@@ -236,8 +246,44 @@ async def document_link(order_id: str, doc_id: str, p: Principal = Depends(requi
     doc = await repo.find_one("documents", {"id": doc_id, "order_id": order_id})
     if not doc:
         raise HTTPException(status_code=404, detail="Document introuvable")
-    await audit("document.link", principal=p, resource_type="document", resource_id=doc_id, outcome="deny", details={"order_id": order_id})
-    raise HTTPException(status_code=403, detail="Le téléchargement des documents est désactivé : utilisez « IMPRIMER DIRECTEMENT ».")
+    return DownloadLinkOut(url=f"/api/orders/{order_id}/documents/{doc_id}/file?variant=original&disposition=attachment", expires_at=0)
+
+
+@router.get("/orders/{order_id}/documents/{doc_id}/file")
+async def document_file(order_id: str, doc_id: str, variant: Literal["original", "print"] = "print",
+                        disposition: Literal["attachment", "inline"] = "attachment",
+                        p: Principal = Depends(require_tenant("documents:read"))):
+    """Staff-only (session cookie) access. 'print' = PDF with only the customer's selected pages, built in memory.
+    Downloading/viewing never creates a print job."""
+    repo = tenant_repo(p)
+    order = await get_order_or_404(repo, order_id)
+    doc = await repo.find_one("documents", {"id": doc_id, "order_id": order_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document introuvable")
+    if doc.get("status") == "purged" or not doc.get("storage_key"):
+        raise HTTPException(status_code=410, detail="Document supprimé après le retrait de la commande")
+    try:
+        data = resolve(doc["storage_key"]).read_bytes()
+    except (StorageError, OSError) as exc:
+        raise HTTPException(status_code=410, detail="Fichier supprimé") from exc
+    line = next((l for l in order["lines"] if l.get("document_id") == doc_id), None)
+    base = (doc.get("filename") or "document").rsplit(".", 1)[0][:80]
+    name, media = f"{base}.{doc['kind']}", MEDIA_TYPES[doc["kind"]]
+    if variant == "print" and doc["kind"] == "pdf" and line:
+        try:
+            pages = parse_page_range((line.get("options") or {}).get("page_range", ""), doc["page_count"])
+            if pages != list(range(1, doc["page_count"] + 1)):
+                data = extract_pages(data, pages)
+        except Exception as exc:
+            logger.exception("print-ready PDF failed for %s", doc_id)
+            raise HTTPException(status_code=422, detail="Impossible de préparer le PDF des pages demandées") from exc
+        name = f"{base} - pages {','.join(map(str, pages))}.pdf" if len(pages) < doc["page_count"] else name
+    await audit("document.download" if disposition == "attachment" else "document.view", principal=p, resource_type="document",
+                resource_id=doc_id, details={"order_id": order_id, "variant": variant})
+    from urllib.parse import quote
+    return Response(data, media_type=media, headers={
+        "Content-Disposition": f"{disposition}; filename*=UTF-8''{quote(name)}",
+        "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
 
 
 # ---------- staff ----------

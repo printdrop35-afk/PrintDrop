@@ -199,3 +199,11 @@ html.brand-v2 :is(h1, h2, h3) { letter-spacing: -0.02em; }
 @media (prefers-reduced-motion: reduce) {
     html.brand-v2 *, html.brand-v2 *::before, html.brand-v2 *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* Pickup ticket: only the ticket is printed (logo + code + QR), on any paper size */
+@media print {
+    body * { visibility: hidden !important; }
+    .pd-print-area, .pd-print-area * { visibility: visible !important; }
+    .pd-print-area { position: absolute; inset: 0 auto auto 0; width: 100%; max-width: 14cm; border: 1px solid #CBD5E1 !important; box-shadow: none !important; }
+    @page { margin: 1.2cm; }
+}

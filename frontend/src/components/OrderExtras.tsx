@@ -50,7 +50,7 @@ export function PrintJobsPanel({ order, canReprint }: { order: OrderOut; canRepr
       {list.length === 0 ? (
         <p className="mt-2 rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900" data-testid="print-jobs-empty">
           Aucun travail envoyé à l'agent. Les travaux sont créés quand vous cliquez « IMPRIMER DIRECTEMENT » et qu'un agent Windows est associé à la boutique.
-          Les documents ne sont pas téléchargeables : ils sont uniquement envoyés à l'imprimante.
+          Rien n'est imprimé automatiquement : l'impression part uniquement après confirmation.
         </p>
       ) : (
         <ul className="mt-2 space-y-2">

@@ -14,6 +14,8 @@ import type { OrderOut, PrintCheckOut, PrintDirectIn, PrintJobOut, PrinterOut } 
 
 /** « IMPRIMER DIRECTEMENT » — server checks everything; the browser only chooses (optionally) a printer. */
 export function PrintDirect({ order, onDone }: { order: OrderOut; onDone: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+  const pagesToPrint = order.lines.filter((l) => l.kind === "print").reduce((n, l) => n + (l.selected_pages?.length ?? l.pages) * l.copies, 0);
   const qc = useQueryClient();
   const [printer, setPrinter] = useState("auto");
   const printers = useQuery({ queryKey: ["printers", order.shop_id], queryFn: () => apiGet<PrinterOut[]>(`/shops/${order.shop_id}/printers`) });
@@ -38,10 +40,17 @@ export function PrintDirect({ order, onDone }: { order: OrderOut; onDone: () => 
           <SelectTrigger size="sm" className="w-56" data-testid="print-direct-printer"><SelectValue>{(v) => (v === "auto" ? "Affectation automatique" : list.find((p) => p.id === v)?.display_name || list.find((p) => p.id === v)?.name)}</SelectValue></SelectTrigger>
           <SelectContent><SelectItem value="auto">Affectation automatique</SelectItem>{list.map((p) => <SelectItem key={p.id} value={p.id}>{p.display_name || p.name}</SelectItem>)}</SelectContent>
         </Select>
-        <Button className="font-bold tracking-wide" disabled={!c?.ok || go.isPending} onClick={() => go.mutate()} data-testid="print-direct-button">
+        <Button className="font-bold tracking-wide" disabled={!c?.ok || go.isPending || confirming} onClick={() => setConfirming(true)} data-testid="print-direct-button">
           {go.isPending ? <Loader2 className="size-4 animate-spin" /> : <Printer className="size-4" />} IMPRIMER DIRECTEMENT
         </Button>
       </div>
+      {confirming && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 p-2 text-sm text-amber-950" data-testid="print-direct-confirm">
+          <span className="flex-1">Envoyer {pagesToPrint} page(s) à l'imprimante maintenant ? Seules les pages choisies par le client seront imprimées.</span>
+          <Button size="sm" disabled={go.isPending} onClick={() => { setConfirming(false); go.mutate(); }} data-testid="print-direct-confirm-yes">Confirmer l'impression</Button>
+          <Button size="sm" variant="ghost" onClick={() => setConfirming(false)} data-testid="print-direct-confirm-no">Annuler</Button>
+        </div>
+      )}
       {c && <ul className="space-y-0.5 text-xs" data-testid="print-direct-check">
         {c.problems.map((p) => <li key={p} className="text-rose-700">✕ {p}</li>)}
         {c.lines.map((l) => (

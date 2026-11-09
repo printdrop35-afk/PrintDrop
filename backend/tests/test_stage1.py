@@ -208,16 +208,19 @@ def test_order_lifecycle_and_counter_payment(client, operator_a):
     paid = operator_a.post(f"/orders/{oid}/pay", json={"method": "cash"})
     assert paid.status_code == 200 and paid.json()["payment_status"] == "paid_counter"
     assert operator_a.post(f"/orders/{oid}/pay", json={"method": "cash"}).status_code == 409  # no double payment
-    assert operator_a.post(f"/orders/{oid}/status", json={"status": "picked_up"}).json()["status"] == "picked_up"
+    wrong = "0000" if order["code"] != "0000" else "1111"
+    assert operator_a.post(f"/orders/{oid}/status", json={"status": "picked_up", "confirm_code": wrong}).status_code == 409  # wrong ticket
+    assert operator_a.post(f"/orders/{oid}/status", json={"status": "picked_up", "confirm_code": order["code"]}).json()["status"] == "picked_up"
     assert operator_a.post(f"/orders/{oid}/status", json={"status": "printing"}).status_code == 409  # terminal
 
 
-def test_document_download_disabled(client, operator_a):
+def test_document_download_staff_only(client, operator_a):
     order = place_order(client)
     o = find_order(operator_a, order["code"])
     doc_id = o["lines"][0]["document_id"]
-    r = operator_a.post(f"/orders/{o['id']}/documents/{doc_id}/link")
-    assert r.status_code == 403 and "IMPRIMER DIRECTEMENT" in r.json()["detail"]
+    r = operator_a.get(f"/orders/{o['id']}/documents/{doc_id}/file?variant=original")
+    assert r.status_code == 200 and r.content.startswith(b"%PDF")
+    assert httpx.get(f"{API_URL}/orders/{o['id']}/documents/{doc_id}/file").status_code == 401  # no session
     assert httpx.get(f"{API_URL}/files/{doc_id}?exp=9999999999&sig=abc").status_code == 403
 
 

@@ -3,11 +3,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Banknote, CreditCard, FileText, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PaymentBadge, StatusBadge } from "@/components/StatusBadge";
 import { AlertsBanner, NotificationsPanel, PrintJobsPanel } from "@/components/OrderExtras";
+import { OrderLineDetails } from "@/components/OrderPrintTools";
 import { PrintDirect } from "@/pages/dashboard/PrintQueue";
 import { PaperStockDialog, PaperStrip } from "@/components/PaperStock";
 import { useDashboard } from "@/hooks/useDashboard";
@@ -26,7 +28,7 @@ const FILTERS = [
 ];
 
 const NEXT: Record<OrderStatus, { to: OrderStatus; label: string; variant?: "outline" | "destructive" }[]> = {
-  pending: [{ to: "printing", label: "Marquer en impression (manuel)" }, { to: "ready", label: "Marquer prête", variant: "outline" }, { to: "cancelled", label: "Annuler", variant: "destructive" }],
+  pending: [{ to: "printing", label: "Marquer en cours (sans imprimer)" }, { to: "ready", label: "Marquer prête", variant: "outline" }, { to: "cancelled", label: "Annuler", variant: "destructive" }],
   printing: [{ to: "ready", label: "Marquer prête" }, { to: "pending", label: "Remettre en attente", variant: "outline" }, { to: "cancelled", label: "Annuler", variant: "destructive" }],
   ready: [{ to: "picked_up", label: "Marquer retirée" }, { to: "printing", label: "Repasser en impression", variant: "outline" }, { to: "cancelled", label: "Annuler", variant: "destructive" }],
   picked_up: [],
@@ -54,12 +56,14 @@ function OrderSheet({ order, onClose }: { order: OrderOut | null; onClose: () =>
     qc.invalidateQueries({ queryKey: ["print-jobs", o.id] });
     qc.invalidateQueries({ queryKey: ["notifications", o.id] });
   };
+  const [pickup, setPickup] = useState(false);
+  const [pickupCode, setPickupCode] = useState("");
   const live = useQuery({ queryKey: ["order", order?.id], queryFn: () => apiGet<OrderOut>(`/orders/${order?.id}`), enabled: !!order, initialData: order ?? undefined, refetchInterval: 5000 });
   const o = live.data ?? order;
 
   const status = useMutation({
-    mutationFn: (to: OrderStatus) => apiPost<OrderOut>(`/orders/${o?.id}/status`, { status: to }),
-    onSuccess: (res) => { refresh(res); toast.success(`Commande ${res.code} : ${tk("status", res.status)}`); },
+    mutationFn: ({ to, confirm_code = "" }: { to: OrderStatus; confirm_code?: string }) => apiPost<OrderOut>(`/orders/${o?.id}/status`, { status: to, confirm_code }),
+    onSuccess: (res) => { refresh(res); setPickup(false); setPickupCode(""); toast.success(`Commande ${res.code} : ${tk("status", res.status)}`); },
     onError: (e) => toast.error(errorMessage(e)),
   });
   const pay = useMutation({
@@ -75,7 +79,9 @@ function OrderSheet({ order, onClose }: { order: OrderOut | null; onClose: () =>
           <>
             <SheetHeader>
               <SheetTitle className="font-mono text-2xl" data-testid="order-detail-code">{o.code}</SheetTitle>
-              <SheetDescription>{o.customer_name} · {o.customer_phone}{o.customer_email ? ` · ${o.customer_email}` : ""} · {formatDateTime(o.created_at)}</SheetDescription>
+              <SheetDescription data-testid="order-detail-contact">
+                {o.customer_name || "Nom non renseigné"} · Tél. : {o.customer_phone || "Non renseigné"} · E-mail : {o.customer_email || "Non renseigné"} · {formatDateTime(o.created_at)}
+              </SheetDescription>
             </SheetHeader>
             <div className="space-y-5 px-4 pb-8">
               <div className="flex flex-wrap gap-2"><StatusBadge status={o.status} testId="order-detail-status" /><PaymentBadge status={o.payment_status} testId="order-detail-payment" /></div>
@@ -99,9 +105,10 @@ function OrderSheet({ order, onClose }: { order: OrderOut | null; onClose: () =>
                 <li className="flex justify-between bg-slate-50 p-3 font-semibold"><span>Total TTC</span><span className="font-mono" data-testid="order-detail-total">{formatEUR(o.total_cents)}</span></li>
               </ul>
 
+              <OrderLineDetails order={o} canDownload={can("documents:read")} />
               {o.purged_at && (
                 <p className="rounded-lg border bg-slate-50 p-3 text-xs text-muted-foreground" data-testid="order-purged-notice">
-                  Documents et coordonnées du client supprimés le {formatDateTime(o.purged_at)} (durée de conservation). La commande reste visible pour vos comptes.
+                  Fichiers supprimés le {formatDateTime(o.purged_at)} (commande terminée). La commande, le paiement, les coordonnées et l'historique restent consultables.
                 </p>
               )}
               {can("orders:update") && o.status === "pending" && !o.purged_at && <PrintDirect order={o} onDone={() => refresh({ ...o, status: "printing" })} />}
@@ -123,11 +130,25 @@ function OrderSheet({ order, onClose }: { order: OrderOut | null; onClose: () =>
                 <div className="space-y-2">
                   <p className="text-xs font-semibold tracking-[0.15em] text-slate-500 uppercase">Statut</p>
                   <div className="flex flex-wrap gap-2">
-                    {NEXT[o.status].filter((n) => !(o.status === "pending" && n.to === "printing")).map((n) => (
-                      <Button key={n.to} variant={n.variant ?? "default"} disabled={status.isPending} onClick={() => status.mutate(n.to)} data-testid={`order-status-${n.to}-button`}>{n.label}</Button>
+                    {NEXT[o.status].map((n) => (
+                      <Button key={n.to} variant={n.variant ?? "default"} disabled={status.isPending} onClick={() => (n.to === "picked_up" ? setPickup(true) : status.mutate({ to: n.to }))} data-testid={`order-status-${n.to}-button`}>{n.label}</Button>
                     ))}
                   </div>
                 </div>
+              )}
+
+              {pickup && (
+                <form className="space-y-2 rounded-xl border border-emerald-300 bg-emerald-50 p-3" data-testid="pickup-confirm"
+                  onSubmit={(e) => { e.preventDefault(); status.mutate({ to: "picked_up", confirm_code: pickupCode }); }}>
+                  <p className="text-sm font-semibold text-emerald-900">Vérifier le retrait : scannez le QR code du client ou saisissez son code</p>
+                  <div className="flex gap-2">
+                    <Input autoFocus value={pickupCode} onChange={(e) => setPickupCode(e.target.value)} placeholder="Code de retrait" inputMode="numeric"
+                      className="h-10 bg-white font-mono" data-testid="pickup-confirm-input" />
+                    <Button type="submit" disabled={!pickupCode.trim() || status.isPending} data-testid="pickup-confirm-submit">Confirmer</Button>
+                    <Button type="button" variant="ghost" onClick={() => { setPickup(false); setPickupCode(""); }} data-testid="pickup-confirm-cancel">Annuler</Button>
+                  </div>
+                  <p className="text-xs text-emerald-800">Les fichiers de la commande seront supprimés automatiquement après le retrait.</p>
+                </form>
               )}
 
               <div>
@@ -210,7 +231,7 @@ export default function Orders() {
               {list.map((o) => (
                 <TableRow key={o.id} onClick={() => setSelected(o)} className="cursor-pointer transition-colors hover:bg-accent/60" data-testid={`order-row-${o.code}`}>
                   <TableCell><span className="font-mono font-semibold text-ink">{o.code}</span><span className="block text-xs text-muted-foreground">{formatDateTime(o.created_at)}</span></TableCell>
-                  <TableCell>{o.customer_name}</TableCell>
+                  <TableCell>{o.customer_name || "Non renseigné"}</TableCell>
                   <TableCell className="hidden max-w-[240px] truncate text-sm text-muted-foreground md:table-cell">{o.lines.map((l) => l.filename ?? l.label).join(", ")}</TableCell>
                   <TableCell><StatusBadge status={o.status} /></TableCell>
                   <TableCell className="hidden sm:table-cell"><PaymentBadge status={o.payment_status} /></TableCell>
