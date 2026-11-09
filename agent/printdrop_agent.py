@@ -31,7 +31,7 @@ from pathlib import Path
 
 import requests
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 IS_WINDOWS = sys.platform == "win32"
 DEFAULT_SERVER = os.environ.get("PRINTDROP_SERVER", "https://print-drop-6.emergent.host")
 DATA_DIR = Path(os.environ.get("PRINTDROP_AGENT_DIR") or (
@@ -338,6 +338,69 @@ def compress_pages(pages: list[int]) -> str:
 
 
 # ---------------------------------------------------------------- server API
+
+# ---------- scanning (Windows Image Acquisition: any scanner recognised by Windows) ----------
+WIA_JPEG = "{B96B3CAE-0728-11D3-9D7B-0000F81EF32E}"
+WIA_PAPER_EMPTY = (-2145320957, 0x80210003)  # feeder empty = normal end of a multi-page feed
+
+
+def list_scanners() -> list[str]:
+    if sys.platform != "win32":
+        return []
+    try:
+        import win32com.client
+        dm = win32com.client.Dispatch("WIA.DeviceManager")
+        return [dm.DeviceInfos.Item(i).Properties("Name").Value for i in range(1, dm.DeviceInfos.Count + 1)
+                if dm.DeviceInfos.Item(i).Type == 1]  # 1 = scanner
+    except Exception as exc:  # WIA absent or no scanner: reported as an empty list, never as a fake device
+        log.debug("WIA indisponible : %s", exc)
+        return []
+
+
+def _set_prop(props, pid: int, value) -> None:
+    for i in range(1, props.Count + 1):
+        if props.Item(i).PropertyID == pid:
+            props.Item(i).Value = value
+            return
+
+
+def wia_scan(color: str, dpi: int, source: str, out_dir: Path) -> list[Path]:
+    """Scans one page (flatbed) or every page of the feeder. Returns JPEG files. Raises with a French message."""
+    if sys.platform != "win32":
+        raise RuntimeError("Le scan direct nécessite Windows (WIA)")
+    import pythoncom
+    import win32com.client
+    pythoncom.CoInitialize()
+    dm = win32com.client.Dispatch("WIA.DeviceManager")
+    infos = [dm.DeviceInfos.Item(i) for i in range(1, dm.DeviceInfos.Count + 1) if dm.DeviceInfos.Item(i).Type == 1]
+    if not infos:
+        raise RuntimeError("Aucun scanner détecté par Windows — vérifiez le câble USB / le réseau et le pilote WIA du fabricant")
+    device = infos[0].Connect()
+    if source == "feeder":
+        _set_prop(device.Properties, 3088, 1)  # WIA_DPS_DOCUMENT_HANDLING_SELECT = FEEDER
+    item = device.Items(1)
+    _set_prop(item.Properties, 6146, 1 if color == "color" else 2)  # current intent: colour / greyscale
+    _set_prop(item.Properties, 6147, dpi)  # horizontal resolution
+    _set_prop(item.Properties, 6148, dpi)  # vertical resolution
+    files: list[Path] = []
+    while True:
+        try:
+            img = item.Transfer(WIA_JPEG)
+        except Exception as exc:
+            code = getattr(exc, "hresult", None) or (exc.args[0] if exc.args else None)
+            if files and code in WIA_PAPER_EMPTY:
+                break  # feeder empty after at least one page
+            if code in WIA_PAPER_EMPTY:
+                raise RuntimeError("Le chargeur est vide — placez le document puis relancez le scan") from exc
+            raise RuntimeError(f"Erreur du scanner : {exc}") from exc
+        path = out_dir / f"scan-{len(files) + 1:03d}.jpg"
+        path.unlink(missing_ok=True)
+        img.SaveFile(str(path))
+        files.append(path)
+        if source != "feeder":
+            break
+    return files
+
 class Api:
     def __init__(self, server: str, key: str):
         self.server = server.rstrip("/")
@@ -393,7 +456,8 @@ class Agent:
         save_json(JOURNAL_FILE, self.journal)
 
     def heartbeat(self) -> int:
-        r = self.api.post("/agent/heartbeat", {"version": VERSION, "printers": self.backend.printers(), "drivers": self.backend.drivers()[:300]})
+        r = self.api.post("/agent/heartbeat", {"version": VERSION, "printers": self.backend.printers(), "drivers": self.backend.drivers()[:300],
+                                               "scanners": list_scanners()[:20]})
         if r.status_code == 401:
             raise SystemExit("Clé refusée : poste révoqué. Ré-associez-le depuis le tableau de bord.")
         r.raise_for_status()
@@ -408,13 +472,30 @@ class Agent:
                     "discover_network": lambda pl: {"devices": self.backend.discover_network(),
                                                     "installed": [p for p in self.backend.printers() if p["connection_type"] == "network"]},
                     "add_network_printer": self.backend.add_network_printer, "test_connection": self.backend.test_connection,
-                    "test_page": self.backend.test_page}
+                    "test_page": self.backend.test_page, "scan": self.scan}
         log.info("Commande reçue : %s", cmd["type"])
         try:
             body = {"ok": True, "result": handlers[cmd["type"]](cmd["payload"]), "error": ""}
         except Exception as exc:  # résultat honnête renvoyé au tableau de bord
             body = {"ok": False, "result": {}, "error": str(exc)[:500]}
         self.api.post(f"/agent/commands/{cmd['id']}/result", body)
+
+    def scan(self, pl: dict) -> dict:
+        """Scans, then uploads every page immediately (pages already sent are kept even if a later one fails)."""
+        work = Path(tempfile.mkdtemp(prefix="scan-", dir=str(TMP_DIR)))
+        sent = 0
+        try:
+            if isinstance(self.backend, DryRunBackend):
+                raise RuntimeError("MODE SIMULATION : aucun scanner n'est piloté")
+            for f in wia_scan(pl.get("color", "color"), int(pl.get("dpi", 300)), pl.get("source", "flatbed"), work):
+                with f.open("rb") as fh:
+                    r = self.api.s.post(f"{self.api.server}/api/agent/scan-sessions/{pl['session_id']}/pages",
+                                        files={"file": (f.name, fh, "image/jpeg")}, timeout=120)
+                r.raise_for_status()
+                sent += 1
+            return {"pages": sent}
+        finally:
+            shutil.rmtree(work, ignore_errors=True)  # no scanned image stays on the PC
 
     def handle(self, job: dict) -> None:
         if job["id"] in self.journal:

@@ -128,7 +128,8 @@ def test_K_pickup_code_tracking_and_validation(client):
     o = find_order(owner, with_phone["code"])
     owner.post(f"/orders/{o['id']}/pay", json={"method": "cash"})
     owner.post(f"/orders/{o['id']}/status", json={"status": "ready"})
-    assert owner.post(f"/orders/{o['id']}/status", json={"status": "picked_up", "confirm_code": no_phone["code"]}).status_code == 409
+    # staff complete directly from the authenticated dashboard: no customer code required
+    assert owner.post(f"/orders/{o['id']}/status", json={"status": "picked_up"}).status_code == 200
 
 
 def test_retention_cron_retries_and_requires_secret(client):

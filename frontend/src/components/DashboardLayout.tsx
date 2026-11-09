@@ -15,6 +15,7 @@ import type { MeOut } from "@/lib/types";
 const NAV: { to: string; key: MessageKey; icon: typeof ClipboardList; perm: string; testId: string }[] = [
   { to: "/dashboard", key: "nav.orders", icon: ClipboardList, perm: "orders:read", testId: "nav-orders" },
   { to: "/dashboard/demarrage", key: "nav.onboarding", icon: Rocket, perm: "shop:edit", testId: "nav-onboarding" },
+  { to: "/dashboard/comptoir", key: "nav.counter", icon: Store, perm: "orders:update", testId: "nav-counter" },
   { to: "/dashboard/file-impression", key: "nav.queue", icon: ListOrdered, perm: "orders:read", testId: "nav-queue" },
   { to: "/dashboard/rapports", key: "nav.reports", icon: BarChart3, perm: "reports:read", testId: "nav-reports" },
   { to: "/dashboard/tarifs", key: "nav.pricing", icon: Euro, perm: "shop:read", testId: "nav-pricing" },

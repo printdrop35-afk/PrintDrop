@@ -12,7 +12,7 @@ jobs:
   build:
     runs-on: windows-latest
     env:
-      AGENT_VERSION: "0.2.0"
+      AGENT_VERSION: "0.3.0"
       # Code signing: add these two repository secrets (Settings → Secrets and variables → Actions) to sign; empty = unsigned build
       WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
       WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}

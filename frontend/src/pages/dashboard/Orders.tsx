@@ -33,6 +33,7 @@ const NEXT: Record<OrderStatus, { to: OrderStatus; label: string; variant?: "out
   printing: [{ to: "ready", label: "Marquer prête" }, { to: "pending", label: "Remettre en attente", variant: "outline" }, { to: "cancelled", label: "Annuler", variant: "destructive" }],
   ready: [{ to: "picked_up", label: "Marquer retirée" }, { to: "printing", label: "Repasser en impression", variant: "outline" }, { to: "cancelled", label: "Annuler", variant: "destructive" }],
   picked_up: [],
+  delivered: [],
   cancelled: [],
 };
 
@@ -128,7 +129,7 @@ function OrderSheet({ order, onClose, verifiedCode, onVerified }: { order: Order
                   <p className="text-xs font-semibold tracking-[0.15em] text-slate-500 uppercase" data-testid="step-status-title">Étape 1 — Statut de la commande</p>
                   <div className="flex flex-wrap gap-2">
                     {NEXT[o.status].map((n) => (
-                      <Button key={n.to} variant={n.variant ?? "default"} disabled={status.isPending} onClick={() => (n.to !== "picked_up" ? status.mutate({ to: n.to }) : verifiedCode ? status.mutate({ to: "picked_up", confirm_code: verifiedCode }) : setPickup(true))} data-testid={`order-status-${n.to}-button`}>{n.label}</Button>
+                      <Button key={n.to} variant={n.variant ?? "default"} disabled={status.isPending} onClick={() => status.mutate({ to: n.to })} data-testid={`order-status-${n.to}-button`}>{n.label}</Button>
                     ))}
                   </div>
                 </div>
@@ -145,7 +146,7 @@ function OrderSheet({ order, onClose, verifiedCode, onVerified }: { order: Order
                 </div>
               )}
               {o.paid_at && <p className="text-sm text-emerald-700" data-testid="order-paid-info">Payé le {formatDateTime(o.paid_at)} · {tk("method", o.payment_method ?? "cash")}</p>}
-              {verifiedCode && o.status === "ready" && <p className="text-xs text-emerald-700" data-testid="order-code-verified">Code client {verifiedCode} déjà vérifié pour cette transaction : le retrait ne le redemandera pas.</p>}
+              
 
               {pickup && (
                 <form className="space-y-2 rounded-xl border border-emerald-300 bg-emerald-50 p-3" data-testid="pickup-confirm"
@@ -222,7 +223,7 @@ export default function Orders() {
         <Input value={scan} onChange={(e) => setScan(e.target.value)} placeholder="Code client — scannez le QR code ou saisissez les 4 chiffres"
           inputMode="numeric" className="h-10 max-w-md flex-1 font-mono" data-testid="order-scan-input" aria-label="Code client" />
         <Button type="submit" disabled={!scan.trim() || lookup.isPending} data-testid="order-scan-submit">Ouvrir la commande</Button>
-        <span className="text-xs text-muted-foreground">Le code n'est demandé qu'une fois par transaction.</span>
+        <span className="text-xs text-muted-foreground">Le code sert uniquement à retrouver la commande : aucune vérification n'est redemandée.</span>
       </form>
 
       <AlertsBanner shopId={shop.id} onPaper={() => setPaperOpen(true)} onOpenOrder={async (id) => setSelected(await apiGet<OrderOut>(`/orders/${id}`))} />

@@ -9,7 +9,7 @@ from lib.pricing import PAPER_SIZES
 
 PaperSize = Literal["A4", "A3", "A5", "Letter", "Legal"]
 ColorMode = Literal["bw", "color"]
-OrderStatus = Literal["pending", "printing", "ready", "picked_up", "cancelled"]
+OrderStatus = Literal["pending", "printing", "ready", "picked_up", "delivered", "cancelled"]  # delivered = digital scan downloaded
 PaymentStatus = Literal["unpaid", "paid_counter", "paid_online"]
 TenantRole = Literal["owner", "manager", "operator"]
 
@@ -305,6 +305,9 @@ class OrderOut(BaseModel):
     id: str
     code: str
     shop_id: str
+    service: Literal["print", "copy", "scan"] = "print"
+    delivery_token: str | None = None  # scan orders: secret customer download link
+    scan_downloaded_at: datetime | None = None
     shop_name: str
     customer_name: str
     customer_phone: str
@@ -552,11 +555,12 @@ class AgentHeartbeatIn(BaseModel):
     version: str = Field(default="", max_length=20)
     drivers: list[str] = Field(default_factory=list, max_length=300)
     printers: list[AgentPrinterIn] = Field(default_factory=list, max_length=50)
+    scanners: list[str] = Field(default_factory=list, max_length=20)  # WIA scanners seen by the agent
 
 
 class AgentCommandOut(BaseModel):
     id: str
-    type: Literal["discover_usb", "discover_network", "add_network_printer", "test_connection", "test_page"]
+    type: Literal["discover_usb", "discover_network", "add_network_printer", "test_connection", "test_page", "scan"]
     payload: dict[str, Any]
 
 
@@ -907,3 +911,74 @@ class ContactMessageOut(BaseModel):
 
 class ContactMessageUpdateIn(BaseModel):
     handled: bool
+
+
+# ---------- counter services (photocopy / scan) ----------
+class CopyIn(BaseModel):
+    color: Literal["bw", "color"] = "bw"
+    paper_size: Literal["A4", "A3"] = "A4"
+    duplex: bool = False
+    originals: int = Field(default=1, ge=1, le=500)  # pages of the paper original
+    copies: int = Field(default=1, ge=1, le=500)
+    customer_name: str = Field(default="", max_length=80)
+
+
+class ScanSessionIn(BaseModel):
+    agent_id: str | None = None  # None = import files from the scanner software only
+    format: Literal["pdf", "jpg"] = "pdf"
+    color: Literal["bw", "color"] = "color"
+    dpi: Literal[150, 200, 300, 600] = 300
+    source: Literal["flatbed", "feeder"] = "flatbed"
+
+
+class ScanPageOut(BaseModel):
+    id: str
+    index: int
+    rotation: int
+    width: int
+    height: int
+
+
+class ScanSessionOut(BaseModel):
+    id: str
+    shop_id: str
+    agent_id: str | None
+    format: Literal["pdf", "jpg"]
+    color: Literal["bw", "color"]
+    dpi: int
+    source: Literal["flatbed", "feeder"]
+    status: Literal["open", "scanning", "finalized"]
+    error: str
+    order_id: str | None
+    pages: list[ScanPageOut]
+    agent_online: bool
+    scanners: list[str]
+    created_at: datetime
+
+
+class ScanPageUpdateIn(BaseModel):
+    rotation: Literal[0, 90, 180, 270]
+
+
+class ScanFinalizeIn(BaseModel):
+    customer_name: str = Field(default="", max_length=80)
+    customer_email: EmailStr | None = None
+
+    @field_validator("customer_email", mode="before")
+    @classmethod
+    def _empty(cls, v):
+        return None if isinstance(v, str) and not v.strip() else v
+
+
+class ScanEmailIn(BaseModel):
+    email: EmailStr
+
+
+class ScanPublicOut(BaseModel):
+    shop_name: str
+    filename: str
+    pages: int
+    kind: str
+    paid: bool
+    available: bool
+    first_download_at: datetime | None

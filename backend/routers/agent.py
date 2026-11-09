@@ -5,7 +5,7 @@ import secrets
 import uuid
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
 
@@ -72,7 +72,7 @@ async def pair(body: AgentPairIn):
 @router.post("/heartbeat", response_model=AgentHeartbeatOut)
 async def heartbeat(body: AgentHeartbeatIn, a: AgentPrincipal = Depends(get_agent)):
     now = now_utc()
-    await db.agents.update_one({"id": a.agent_id}, {"$set": {"last_seen_at": now, "version": body.version, "drivers": body.drivers[:300]}})
+    await db.agents.update_one({"id": a.agent_id}, {"$set": {"last_seen_at": now, "version": body.version, "drivers": body.drivers[:300], "scanners": body.scanners[:20]}})
     previous = {p["name"]: p.get("status") for p in await db.printers.find({"org_id": a.org_id, "agent_id": a.agent_id}, {"_id": 0, "name": 1, "status": 1}).to_list(100)}
     has_default = bool(await db.printers.find_one({"org_id": a.org_id, "shop_id": a.shop_id, "is_default": True}, {"_id": 1}))
     seen = []
@@ -215,3 +215,14 @@ async def job_file(job_id: str, lease: str, a: AgentPrincipal = Depends(get_agen
     await audit("job.file", org_id=a.org_id, resource_type="print_job", resource_id=job_id, actor=f"agent:{a.name}",
                 details={"pages": job["options"].get("page_range", "") or "toutes"})
     return Response(data, media_type=MEDIA_TYPES[doc["kind"]], headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+
+
+@router.post("/scan-sessions/{session_id}/pages")
+async def agent_scan_page(session_id: str, file: UploadFile = File(...), a: AgentPrincipal = Depends(get_agent)):
+    """One scanned page from the counter PC (stored at once: never lost if the browser disconnects)."""
+    from routers.counter import add_page
+    s = await db.scan_sessions.find_one({"id": session_id, "org_id": a.org_id, "shop_id": a.shop_id, "agent_id": a.agent_id}, {"_id": 0})
+    if not s:
+        raise HTTPException(status_code=404, detail="Session de scan inconnue")
+    page = await add_page(s, await file.read(15 * 1024 * 1024 + 1), f"agent:{a.name}")
+    return {"ok": True, "index": page["index"]}

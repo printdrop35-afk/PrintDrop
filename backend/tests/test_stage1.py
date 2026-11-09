@@ -208,9 +208,8 @@ def test_order_lifecycle_and_counter_payment(client, operator_a):
     paid = operator_a.post(f"/orders/{oid}/pay", json={"method": "cash"})
     assert paid.status_code == 200 and paid.json()["payment_status"] == "paid_counter"
     assert operator_a.post(f"/orders/{oid}/pay", json={"method": "cash"}).status_code == 409  # no double payment
-    wrong = "0000" if order["code"] != "0000" else "1111"
-    assert operator_a.post(f"/orders/{oid}/status", json={"status": "picked_up", "confirm_code": wrong}).status_code == 409  # wrong ticket
-    assert operator_a.post(f"/orders/{oid}/status", json={"status": "picked_up", "confirm_code": order["code"]}).json()["status"] == "picked_up"
+    # authenticated staff complete the order directly: no customer code is asked again
+    assert operator_a.post(f"/orders/{oid}/status", json={"status": "picked_up"}).json()["status"] == "picked_up"
     assert operator_a.post(f"/orders/{oid}/status", json={"status": "printing"}).status_code == 409  # terminal
 
 

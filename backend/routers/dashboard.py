@@ -36,6 +36,7 @@ TRANSITIONS: dict[str, set[str]] = {
     "printing": {"ready", "pending", "cancelled"},
     "ready": {"picked_up", "printing", "cancelled"},
     "picked_up": set(),
+    "delivered": set(),  # set automatically on the customer's first scan download
     "cancelled": set(),
 }
 
@@ -202,11 +203,7 @@ async def change_status(order_id: str, body: OrderStatusIn, request: Request, p:
         raise HTTPException(status_code=409, detail=f"Transition impossible : {current} → {target}")
     if target == "picked_up" and order["payment_status"] == "unpaid":
         raise HTTPException(status_code=409, detail="Encaissez la commande avant de la marquer comme retirée")
-    if target == "picked_up" and body.confirm_code.strip().upper() != order["code"].upper():
-        # pickup validation: the code on the customer's ticket (scanned or typed) must match this order
-        await audit("order.pickup_mismatch", principal=p, resource_type="order", resource_id=order_id, outcome="deny",
-                    details={"code": order["code"], "given": body.confirm_code[:20]})
-        raise HTTPException(status_code=409, detail="Le code de retrait ne correspond pas à cette commande")
+    # authenticated staff complete orders from the dashboard: no customer code is asked (tenant scope = authorization)
     now = now_utc()
     matched = await repo.update_one("orders", {"id": order_id, "status": current}, {
         "$set": {"status": target, "updated_at": now},

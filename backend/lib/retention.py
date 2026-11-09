@@ -33,11 +33,20 @@ async def _erase_documents(query: dict) -> tuple[int, int]:
     return deleted, failed
 
 
+SCAN_GRACE = timedelta(hours=24)  # digital scans: kept 24 h after the customer's first download
+
+
+def _due(order: dict) -> bool:
+    if order["status"] in FINAL_STATUSES:
+        return True
+    return order["status"] == "delivered" and bool(order.get("scan_downloaded_at")) and now_utc() - order["scan_downloaded_at"] >= SCAN_GRACE
+
+
 async def purge_order(order_id: str) -> bool:
     """Delete the files of one finished order (idempotent). Order record untouched except purged_at."""
-    order = await db.orders.find_one({"id": order_id}, {"_id": 0, "id": 1, "status": 1})
-    if not order or order["status"] not in FINAL_STATUSES:
-        return False  # never delete while pending / printing / ready
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0, "id": 1, "status": 1, "scan_downloaded_at": 1})
+    if not order or not _due(order):
+        return False  # never delete while pending / printing / ready, nor a scan the customer has not downloaded
     now = now_utc()
     await db.print_jobs.update_many({"order_id": order_id, "status": {"$in": ["queued", "claimed", "retry_wait"]}},
                                     {"$set": {"status": "cancelled", "error": "Document supprimé (commande terminée)", "updated_at": now}})
@@ -54,8 +63,16 @@ async def purge_order(order_id: str) -> bool:
 async def run_retention() -> dict:
     """Hourly: finished orders whose files are not deleted yet (incl. failed attempts), and orphan uploads."""
     orders = 0
-    async for o in db.orders.find({"status": {"$in": FINAL_STATUSES}, "purged_at": None}, {"_id": 0, "id": 1}):
+    async for o in db.orders.find({"status": {"$in": FINAL_STATUSES + ["delivered"]}, "purged_at": None}, {"_id": 0, "id": 1}):
         orders += await purge_order(o["id"])
+    # scan pages of sessions abandoned for 24 h (finalised sessions erase their pages immediately)
+    old = now_utc() - timedelta(hours=ORPHAN_UPLOAD_HOURS)
+    async for pg in db.scan_pages.find({"created_at": {"$lt": old}}, {"_id": 0, "id": 1, "storage_key": 1}):
+        try:
+            resolve(pg["storage_key"]).unlink(missing_ok=True)
+            await db.scan_pages.delete_one({"id": pg["id"]})
+        except OSError as exc:
+            logger.error("retention: scan page %s not deleted (will retry): %s", pg["id"], exc)
     orphans, _ = await _erase_documents({"order_id": None, "created_at": {"$lt": now_utc() - timedelta(hours=ORPHAN_UPLOAD_HOURS)}})
     logger.info("retention: %s orders, %s orphan uploads deleted", orders, orphans)
     return {"orders": orders, "orphan_documents": orphans}

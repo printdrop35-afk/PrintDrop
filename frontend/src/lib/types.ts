@@ -2,7 +2,7 @@
 
 export type PaperSize = "A4" | "A3" | "A5" | "Letter" | "Legal";
 export type ColorMode = "bw" | "color";
-export type OrderStatus = "pending" | "printing" | "ready" | "picked_up" | "cancelled";
+export type OrderStatus = "pending" | "printing" | "ready" | "picked_up" | "delivered" | "cancelled";
 export type PaymentStatus = "unpaid" | "paid_counter" | "paid_online";
 export type TenantRole = "owner" | "manager" | "operator";
 
@@ -80,7 +80,7 @@ export interface OrderPublicOut {
 }
 
 export interface OrderOut {
-  id: string; code: string; shop_id: string; shop_name: string; customer_name: string; customer_phone: string;
+  id: string; code: string; shop_id: string; service?: "print" | "copy" | "scan"; delivery_token?: string | null; scan_downloaded_at?: string | null; shop_name: string; customer_name: string; customer_phone: string;
   customer_email: string | null; notify: boolean; note: string; lines: QuoteLine[]; total_cents: number;
   total_ht_cents: number | null; vat_cents: number | null; vat_rate_bp: number | null; discount_cents: number; currency: string; status: OrderStatus;
   payment_status: PaymentStatus; payment_method: string | null; paid_at: string | null;
@@ -202,3 +202,14 @@ export interface ContactMessageOut {
   created_at: string; delivered: boolean; handled: boolean; handled_at: string | null;
 }
 export interface ContactMessageUpdateIn { handled: boolean }
+
+// ---------- counter services ----------
+export interface CopyIn { color: "bw" | "color"; paper_size: "A4" | "A3"; duplex: boolean; originals: number; copies: number; customer_name: string }
+export interface ScanSessionIn { agent_id: string | null; format: "pdf" | "jpg"; color: "bw" | "color"; dpi: 150 | 200 | 300 | 600; source: "flatbed" | "feeder" }
+export interface ScanPageOut { id: string; index: number; rotation: number; width: number; height: number }
+export interface ScanSessionOut extends ScanSessionIn {
+  id: string; shop_id: string; status: "open" | "scanning" | "finalized"; error: string; order_id: string | null;
+  pages: ScanPageOut[]; agent_online: boolean; scanners: string[]; created_at: string;
+}
+export interface ScanFinalizeIn { customer_name: string; customer_email: string | null }
+export interface ScanPublicOut { shop_name: string; filename: string; pages: number; kind: string; paid: boolean; available: boolean; first_download_at: string | null }

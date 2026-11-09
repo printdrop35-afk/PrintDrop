@@ -19,6 +19,8 @@ import InvoicePage from "@/pages/dashboard/Invoice";
 import LandingV2 from "@/pages/site/LandingV2";
 import Contact from "@/pages/site/Contact";
 import LegalPage from "@/pages/site/Legal";
+import Counter from "@/pages/dashboard/Counter";
+import ScanDownload from "@/pages/ScanDownload";
 
 // One <Route> per page in src/pages; BrowserRouter already wraps this in main.tsx.
 export default function App() {
@@ -30,6 +32,7 @@ export default function App() {
         <Route path="/connexion" element={<Login />} />
         <Route path="/inscription" element={<Register />} />
         <Route path="/s/:slug" element={<CustomerPortal />} />
+        <Route path="/scan/:token" element={<ScanDownload />} />
         <Route path="/suivi" element={<Tracking />} />
         <Route path="/suivi/:code" element={<Tracking />} />
         <Route path="/superadmin" element={<SuperAdmin />} />
@@ -43,6 +46,7 @@ export default function App() {
           <Route path="demarrage" element={<Onboarding />} />
           <Route path="abonnement/facture/:id" element={<InvoicePage />} />
           <Route path="imprimantes" element={<Devices />} />
+          <Route path="comptoir" element={<Counter />} />
           <Route path="equipe" element={<Team />} />
           <Route path="journal" element={<Audit />} />
         </Route>

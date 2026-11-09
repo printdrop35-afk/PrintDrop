@@ -110,3 +110,10 @@ Pour une nouvelle version : modifier `AGENT_VERSION` dans le workflow puis repou
 ## Publier une mise à jour
 1. Augmentez `AGENT_VERSION` dans le workflow (et `AGENT_VERSION` dans `printdrop_agent.py`), poussez sur GitHub.
 2. Dans le **Super-admin → Agent Windows**, saisissez la nouvelle version (et le lien si besoin) : les boutiques dont l'agent est plus ancien voient un avis « Nouvelle version disponible » sur la page Imprimantes.
+
+## Scan direct (agent 0.3.0)
+- Le scan utilise WIA (Windows Image Acquisition) : tout scanner reconnu par Windows (« Imprimantes et scanners ») avec le pilote WIA du fabricant.
+- Vitre : une page par scan. Chargeur (ADF) : toutes les pages du chargeur. Chaque page est envoyée tout de suite au serveur (rien n'est perdu si la connexion coupe) et effacée du PC.
+- Si le scanner n'a pas de pilote WIA, utilisez le logiciel du fabricant puis « Importer des fichiers » dans PrintDrop.
+- Photocopie : Windows ne permet pas de déclencher la fonction copie d'un multifonction ; faites la copie avec le bouton Copie du copieur, PrintDrop calcule le prix et enregistre le paiement.
+- Non testé sur matériel réel à ce jour : à valider sur votre scanner.

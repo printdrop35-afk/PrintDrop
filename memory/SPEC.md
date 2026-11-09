@@ -133,3 +133,13 @@ backend/tests/test_stage1.py — auth, pricing, upload validation, token binding
 - components/PickupReceipt.tsx shown in the order sheet once status = picked_up: logo, shop name/address, code, pickup date, lines, HT/TVA/TTC, payment method (Espèce/Carte), paid date. Print window opens once automatically right after pickup (user confirms), plus « Imprimer le reçu » button.
 - lib/printElement.ts prints a single element in a clean hidden iframe (app styles copied, 72 mm for the receipt, 12 cm for the pickup ticket) — used by receipt and pickup ticket.
 - i18n: method.cash « Espèce », method.card_terminal « Carte ».
+
+## Counter services v5: Photocopie & Scan (dashboard « Comptoir », /dashboard/comptoir)
+- Tabs: Impression depuis le téléphone (→ Commandes) · Photocopie · Scan document. No customer account/code needed; staff session + tenant scope authorise everything.
+- Photocopy: POST /api/shops/{id}/counter/copy/quote and /counter/copy (CopyIn: color, A4/A3, duplex, originals, copies). Order service="copy", status printing → agent clicks « Copies sorties du copieur » (ready) → pay Espèce/Carte → « Terminer » (picked_up). Copy is made with the copier's own Copy button (Windows drivers expose no copy function); never auto-marked done.
+- Scan: scan_sessions + scan_pages (temp JPEGs). POST /shops/{id}/scan-sessions, POST /scan-sessions/{id}/scan (agent command "scan" via WIA, 409 if agent offline / already scanning), agent POST /api/agent/scan-sessions/{id}/pages, staff import fallback POST /scan-sessions/{id}/upload, PATCH/DELETE pages (rotate/remove), GET page image, POST /finalize (one PDF or single JPG, idempotent) → order service="scan", status ready, delivery_token. Raw pages deleted at finalize; abandoned sessions after 24 h.
+- Delivery: public /scan/:token page, GET /api/public/scans/{token}(/file) (402 until paid, 410 after deletion); first download → status "delivered" + scan_downloaded_at; POST /orders/{id}/scan-email.
+- Retention: picked_up/cancelled → files deleted at once; delivered scans 24 h after first download; undownloaded scans kept.
+- Pickup: customer code NO LONGER required for authenticated staff (confirm_code ignored); scan box only finds the order. Payment idempotent (409 on second).
+- Agent v0.3.0: WIA scanning (flatbed / feeder), scanners listed in heartbeat. UNTESTED on real hardware.
+- Tests: backend/tests/test_counter.py.

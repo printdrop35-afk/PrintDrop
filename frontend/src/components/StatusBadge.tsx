@@ -7,6 +7,7 @@ const STATUS_STYLE: Record<OrderStatus, string> = {
   printing: "bg-blue-100 text-blue-800 ring-blue-200",
   ready: "bg-emerald-100 text-emerald-800 ring-emerald-200",
   picked_up: "bg-slate-200 text-slate-700 ring-slate-300",
+  delivered: "bg-slate-200 text-slate-700 ring-slate-300",
   cancelled: "bg-rose-100 text-rose-800 ring-rose-200",
 };
 
