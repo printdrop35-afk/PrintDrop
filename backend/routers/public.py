@@ -7,7 +7,10 @@ import uuid
 
 from pymongo.errors import DuplicateKeyError
 from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
+import logging
+
+logger = logging.getLogger(__name__)
 
 from lib.authz import audit, now_utc, request_origin
 from lib.db import db
@@ -16,7 +19,7 @@ from lib.platform import shop_vat_bp
 from lib.pricing import finalize, price_extras, price_print, price_services, public_pricing
 from lib.security import new_secret_token, sha256, verify_file_link
 import asyncio
-from lib.storage import MEDIA_TYPES, convert_docx, MAX_BYTES, StorageError, count_pages, detect_kind, resolve, save_file
+from lib.storage import MEDIA_TYPES, convert_docx, MAX_BYTES, StorageError, count_pages, detect_kind, read_file, save_file
 from models.schemas import (
     DocumentUploadOut, OrderCreateIn, OrderPublicOut, PublicShopOut, QuoteIn, QuoteOut, TrackIn,
 )
@@ -84,7 +87,7 @@ async def upload_document(slug: str, file: UploadFile = File(...)):
         pages = count_pages(data, kind)
     except StorageError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    key = save_file(shop["org_id"], shop["id"], data, kind)
+    key = await save_file(shop["org_id"], shop["id"], data, kind)
     token = new_secret_token()
     filename = re.sub(r"[^\w.\- ()À-ÿ]", "_", (file.filename or f"document.{kind}"))[:120]
     doc = {
@@ -219,12 +222,11 @@ async def signed_file(doc_id: str, exp: int = Query(...), sig: str = Query(..., 
     if doc.get("status") == "purged" or not doc.get("storage_key"):
         raise HTTPException(status_code=410, detail="Document supprimé après le retrait de la commande")
     try:
-        path = resolve(doc["storage_key"])
-    except StorageError as exc:
-        raise HTTPException(status_code=404, detail="Document introuvable") from exc
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="Fichier supprimé")
-    return FileResponse(
-        path, media_type=MEDIA_TYPES[doc["kind"]], filename=doc["filename"], content_disposition_type="inline",
-        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
-    )
+        data = await read_file(doc["storage_key"])
+    except (StorageError, OSError) as exc:
+        logger.error("signed_file: stored file missing for document %s (%s)", doc_id, doc["storage_key"])
+        raise HTTPException(status_code=404, detail="Fichier introuvable sur le serveur") from exc
+    from urllib.parse import quote
+    return Response(data, media_type=MEDIA_TYPES[doc["kind"]], headers={
+        "Content-Disposition": f"inline; filename*=UTF-8''{quote(doc['filename'])}",
+        "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})

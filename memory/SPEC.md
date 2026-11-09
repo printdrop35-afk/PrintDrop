@@ -148,3 +148,9 @@ backend/tests/test_stage1.py — auth, pricing, upload validation, token binding
 - GET /api/shops/{id}/reports/cash?day=YYYY-MM-DD (reports:read, Europe/Paris day): payments split cash / card_terminal / other, totals, every payment (time, order code, service, method, amount). 422 future day, 404 other tenant.
 - Reports page « Clôture de caisse » card (components/CashSummary.tsx), same day picker, live refresh today, « Imprimer la clôture » via printElement (logo + shop + date header).
 - Tests: test_counter.py::test_cash_summary_by_method.
+
+## Document storage (fix "Fichier supprimé" on print)
+- Root cause (prod RCA): files were written to the container's local disk (STORAGE_DIR), which is per-replica and wiped on each redeploy → documents still referenced in Mongo were missing → 410 "Fichier supprimé" when staff opened/printed.
+- Now: lib/storage.save_file/read_file/delete_file (async) store bytes in MongoDB GridFS (bucket `files`, key `gridfs:<ObjectId>`), shared by all replicas and persistent. Legacy local-disk keys are still readable when present.
+- Lifecycle: original kept until order picked_up/cancelled (lib/retention.purge_order); print-ready PDF (selected pages only) built in memory on each request. Deletion idempotent, retried hourly, order/payment/history kept.
+- Test: backend/tests/test_document_lifecycle.py (wipes local disk, 4-page PDF, 1-1 / 1-2, agent print, pickup deletes only that order).

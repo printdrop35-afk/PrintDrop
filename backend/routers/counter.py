@@ -23,7 +23,7 @@ from lib.pricing import PAPER_LABELS, finalize
 from lib.printing import is_online
 from lib.platform import shop_vat_bp
 from routers.dashboard import get_shop_or_404
-from lib.storage import MEDIA_TYPES, StorageError, resolve, save_file
+from lib.storage import MEDIA_TYPES, StorageError, delete_file, read_file, save_file
 from models.schemas import CopyIn, OrderOut, ScanEmailIn, ScanFinalizeIn, ScanPageUpdateIn, ScanPublicOut, ScanSessionIn, ScanSessionOut
 
 logger = logging.getLogger(__name__)
@@ -187,7 +187,7 @@ async def add_page(s: dict, data: bytes, by: str) -> dict:
     if count >= MAX_PAGES:
         raise HTTPException(status_code=422, detail=f"{MAX_PAGES} pages maximum par scan")
     jpg = _normalise_image(data)
-    key = save_file(s["org_id"], s["shop_id"], jpg, "jpg")
+    key = await save_file(s["org_id"], s["shop_id"], jpg, "jpg")
     w, h = Image.open(io.BytesIO(jpg)).size
     page = {"id": str(uuid.uuid4()), "session_id": s["id"], "org_id": s["org_id"], "storage_key": key, "index": count,
             "rotation": 0, "width": w, "height": h, "created_at": now_utc(), "by": by}
@@ -203,8 +203,8 @@ async def import_page(session_id: str, file: UploadFile = File(...), p: Principa
     return await _session_out(p, s)
 
 
-def _render(key: str, rotation: int, color: str, max_side: int | None = None) -> Image.Image:
-    img = Image.open(resolve(key))
+def _render(data: bytes, rotation: int, color: str, max_side: int | None = None) -> Image.Image:
+    img = Image.open(io.BytesIO(data))
     img.load()
     if rotation:
         img = img.rotate(-rotation, expand=True)
@@ -221,7 +221,7 @@ async def page_image(session_id: str, page_id: str, thumb: bool = True, p: Princ
     if not pg:
         raise HTTPException(status_code=404, detail="Page introuvable")
     out = io.BytesIO()
-    _render(pg["storage_key"], pg["rotation"], s["color"], 900 if thumb else None).save(out, "JPEG", quality=80)
+    _render(await read_file(pg["storage_key"]), pg["rotation"], s["color"], 900 if thumb else None).save(out, "JPEG", quality=80)
     return Response(out.getvalue(), media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
 
@@ -239,7 +239,7 @@ async def delete_page(session_id: str, page_id: str, p: Principal = Depends(requ
     s = await _session(p, session_id)
     pg = await db.scan_pages.find_one_and_delete({"id": page_id, "session_id": s["id"], "org_id": p.org_id})
     if pg:
-        resolve(pg["storage_key"]).unlink(missing_ok=True)
+        await delete_file(pg["storage_key"])
         async for i, other in _aenumerate(db.scan_pages.find({"session_id": s["id"]}, {"_id": 0, "id": 1}).sort("index", 1)):
             await db.scan_pages.update_one({"id": other["id"]}, {"$set": {"index": i}})
     return await _session_out(p, s)
@@ -263,14 +263,14 @@ async def finalize_scan(session_id: str, body: ScanFinalizeIn, p: Principal = De
         raise HTTPException(status_code=422, detail="Aucune page scannée")
     if s["format"] == "jpg" and len(pages) > 1:
         raise HTTPException(status_code=422, detail="Le format JPG ne contient qu'une page : choisissez PDF pour un document de plusieurs pages")
-    imgs = [_render(pg["storage_key"], pg["rotation"], s["color"]) for pg in pages]
+    imgs = [_render(await read_file(pg["storage_key"]), pg["rotation"], s["color"]) for pg in pages]
     out = io.BytesIO()
     if s["format"] == "pdf":
         imgs[0].save(out, "PDF", save_all=True, append_images=imgs[1:], resolution=float(s["dpi"]))
     else:
         imgs[0].save(out, "JPEG", quality=92, dpi=(s["dpi"], s["dpi"]))
     shop = await get_shop_or_404(tenant_repo(p), s["shop_id"])
-    key = save_file(p.org_id, shop["id"], out.getvalue(), s["format"])
+    key = await save_file(p.org_id, shop["id"], out.getvalue(), s["format"])
     stamp = now_utc().strftime("%Y%m%d-%H%M")
     doc = {"id": str(uuid.uuid4()), "org_id": p.org_id, "shop_id": shop["id"], "storage_key": key, "kind": s["format"],
            "filename": f"scan-{stamp}.{s['format']}", "page_count": len(pages), "size_bytes": out.tell(), "sha256": "",
@@ -286,14 +286,14 @@ async def finalize_scan(session_id: str, body: ScanFinalizeIn, p: Principal = De
     # claim the session first so two concurrent finalize calls cannot create two orders
     claimed = await db.scan_sessions.update_one({"id": s["id"], "order_id": None}, {"$set": {"order_id": order["id"], "status": "finalized"}})
     if not claimed.modified_count:
-        resolve(key).unlink(missing_ok=True)
+        await delete_file(key)
         fresh = await _session(p, session_id)
         return await tenant_repo(p).find_one("orders", {"id": fresh["order_id"]})
     doc["order_id"] = order["id"]
     await db.documents.insert_one(dict(doc))
     order = await _insert_order(order)
     for pg in pages:  # raw pages are temporary files: erased as soon as the deliverable exists
-        resolve(pg["storage_key"]).unlink(missing_ok=True)
+        await delete_file(pg["storage_key"])
     await db.scan_pages.delete_many({"session_id": s["id"]})
     await audit("order.scan_create", principal=p, resource_type="order", resource_id=order["id"], details={"pages": len(pages), "format": s["format"]})
     return order
@@ -351,7 +351,7 @@ async def scan_file(token: str):
     if not doc or doc.get("status") == "purged" or not doc.get("storage_key"):
         raise HTTPException(status_code=410, detail="Ce scan a été supprimé (24 h après le premier téléchargement)")
     try:
-        data = resolve(doc["storage_key"]).read_bytes()
+        data = await read_file(doc["storage_key"])
     except (StorageError, OSError) as exc:
         raise HTTPException(status_code=410, detail="Ce scan n'est plus disponible") from exc
     now = now_utc()

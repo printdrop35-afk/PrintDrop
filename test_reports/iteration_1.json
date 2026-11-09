@@ -1,0 +1,72 @@
+{
+  "passed": 9,
+  "failed": 0,
+  "bugs": [],
+  "action_items": [],
+  "retest_needed": false,
+  "checks": [
+    {
+      "criterion": "Staff open a customer's 4-page PDF in the dashboard order detail (all pages load, original variant, no 'Fichier supprimé')",
+      "name": "staff-view-order-pdf-details",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Logged in as employe@bastille.fr, opened order 8834 (tscheck-view.pdf, 4 pages) via order-scan search; order-detail-sheet shows print-details-0-filename=tscheck-view.pdf, doc-pages=4, no print-details-0-deleted element; GET .../documents/{doc}/file?variant=original&disposition=attachment and ?variant=print both returned HTTP 200 with content-type application/pdf."
+    },
+    {
+      "criterion": "Staff open order PDF in dashboard (public preview ingress path)",
+      "name": "staff-view-order-pdf-details-preview",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Same flow re-run through https://print-drop-6--08uafkjn.preview.emergentagent.com; order-detail-sheet visible with code 8834, filename tscheck-view.pdf, no deleted notice."
+    },
+    {
+      "criterion": "Customer selected pages 1-1 / 1-2 / etc → print-ready PDF contains only selected pages; invalid selections rejected (422)",
+      "name": "test_A_B_C_page_selection_print_ready_pdf (test_retention_pages.py)",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "pytest: for specs 1-1,1,3,1-4,2,4,1-2,4,3,1 -> GET /orders/{id}/documents/{doc}/file?variant=print returned 200 with exact expected page sets; variant=original always returned [1,2,3,4]; invalid ranges (5,0-2,3-1,a,1-9) on /public/shops/{slug}/quote returned 422."
+    },
+    {
+      "criterion": "Staff click Print/download: HTTP 200, no 'supprimé' error, no automatic print job created by download/status change alone",
+      "name": "test_D_F_no_automatic_printing_and_agent_gets_only_pages (test_retention_pages.py)",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "pytest: GET .../file?variant=print -> 200 after upload/order/status=printing with no job created (GET /orders/{id}/print-jobs == [] and agent claim == []); only explicit POST /orders/{id}/print-direct creates a job, and agent receives only selected page(s)."
+    },
+    {
+      "criterion": "Files durable: new uploads storage_key starts 'gridfs:'; deleting backend/storage_private does not break reading",
+      "name": "test_documents_survive_local_disk_loss_and_live_until_pickup (test_document_lifecycle.py)",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "pytest: document storage_key startswith 'gridfs:'; shutil.rmtree(STORAGE_DIR) executed; subsequent GET .../file?variant=original returned all 4 pages and ?variant=print returned the correct subset for two separate orders."
+    },
+    {
+      "criterion": "Order status printing/ready/paid: document still accessible; hourly POST /api/cron/retention leaves it intact",
+      "name": "test_documents_survive_local_disk_loss_and_live_until_pickup (test_document_lifecycle.py)",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "pytest: after status=ready, pay(card_terminal), and POST /cron/retention (Bearer WEBHOOK_CRON_SECRET), GET .../file?variant=print still returned 200."
+    },
+    {
+      "criterion": "Order marked picked_up: files deleted (410), order/payment/history still viewable",
+      "name": "test_documents_survive_local_disk_loss_and_live_until_pickup (test_document_lifecycle.py)",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "pytest: POST /orders/{id}/status picked_up -> 200; GridFS file count for that key == 0; document status 'purged'; GET /orders/{id} shows purged_at set, payment_status != unpaid, history last entry picked_up; GET .../file -> 410."
+    },
+    {
+      "criterion": "Two customers' orders: pickup of order A does not affect order B's document",
+      "name": "test_documents_survive_local_disk_loss_and_live_until_pickup (test_document_lifecycle.py)",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "pytest: after order A picked_up/purged, GET /orders/{B}/documents/{docB}/file?variant=print still returned 200 with pages [1,2]."
+    },
+    {
+      "criterion": "Full backend regression (no collateral breakage from document-storage fix)",
+      "name": "full backend suite",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "cd /app/backend && python -m pytest -q -> 55 passed in 26.00s (all files incl. test_agent_notify, test_agent_release, test_counter, test_printers, test_pricing_billing, test_reports_alerts, test_stage1)."
+    }
+  ]
+}

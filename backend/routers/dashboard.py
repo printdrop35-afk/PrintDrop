@@ -23,7 +23,7 @@ from models.schemas import (
 from routers.auth import new_shop_doc, unique_slug
 
 from typing import Literal
-from lib.storage import MEDIA_TYPES, StorageError, extract_pages, resolve
+from lib.storage import MEDIA_TYPES, StorageError, extract_pages, read_file
 from lib.pricing import parse_page_range
 import logging
 logger = logging.getLogger(__name__)
@@ -273,9 +273,10 @@ async def document_file(order_id: str, doc_id: str, variant: Literal["original",
     if doc.get("status") == "purged" or not doc.get("storage_key"):
         raise HTTPException(status_code=410, detail="Document supprimé après le retrait de la commande")
     try:
-        data = resolve(doc["storage_key"]).read_bytes()
+        data = await read_file(doc["storage_key"])
     except (StorageError, OSError) as exc:
-        raise HTTPException(status_code=410, detail="Fichier supprimé") from exc
+        logger.error("document_file: stored file missing for document %s of order %s (%s)", doc_id, order_id, doc["storage_key"])
+        raise HTTPException(status_code=404, detail="Fichier introuvable sur le serveur — demandez au client de renvoyer son document") from exc
     line = next((l for l in order["lines"] if l.get("document_id") == doc_id), None)
     base = (doc.get("filename") or "document").rsplit(".", 1)[0][:80]
     name, media = f"{base}.{doc['kind']}", MEDIA_TYPES[doc["kind"]]

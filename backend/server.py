@@ -30,7 +30,7 @@ async def cleanup_orphan_uploads() -> None:
         try:
             cutoff = now_utc() - timedelta(hours=24)
             async for doc in db.documents.find({"status": "uploaded", "created_at": {"$lt": cutoff}}, {"_id": 0}):
-                delete_file(doc["storage_key"])
+                await delete_file(doc["storage_key"])
                 await db.documents.delete_one({"id": doc["id"]})
         except Exception as exc:  # never let the job die
             logger.error("cleanup_orphan_uploads: %s", exc)

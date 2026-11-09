@@ -15,7 +15,7 @@ from lib.pricing import parse_page_range
 from lib.notify import alert_owner
 from lib.printing import CLAIM_LEASE_SECONDS, PRINT_LEASE_SECONDS, maybe_complete_order
 from lib.security import sha256
-from lib.storage import MEDIA_TYPES, StorageError, extract_pages, resolve
+from lib.storage import MEDIA_TYPES, StorageError, extract_pages, read_file
 from models.schemas import (
     AgentClaimOut, AgentCommandResultIn, AgentHeartbeatIn, AgentHeartbeatOut, AgentJobOut, AgentPairIn, AgentPairOut, AgentReportIn, AgentReportOut,
 )
@@ -205,7 +205,7 @@ async def job_file(job_id: str, lease: str, a: AgentPrincipal = Depends(get_agen
     if not doc or not doc.get("storage_key"):
         raise HTTPException(status_code=404, detail="Document supprimé")
     try:
-        data = resolve(doc["storage_key"]).read_bytes()
+        data = await read_file(doc["storage_key"])
     except (StorageError, OSError) as exc:
         raise HTTPException(status_code=404, detail="Fichier supprimé") from exc
     if doc["kind"] == "pdf":

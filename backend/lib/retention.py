@@ -7,7 +7,7 @@ from datetime import timedelta
 
 from lib.authz import now_utc
 from lib.db import db
-from lib.storage import StorageError, resolve
+from lib.storage import StorageError, delete_file
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ async def _erase_documents(query: dict) -> tuple[int, int]:
     async for doc in db.documents.find({**query, "status": {"$ne": "purged"}}, {"_id": 0, "id": 1, "storage_key": 1}):
         try:
             if doc.get("storage_key"):
-                resolve(doc["storage_key"]).unlink(missing_ok=True)
+                await delete_file(doc["storage_key"])
         except (OSError, StorageError) as exc:
             failed += 1
             logger.error("retention: deletion failed for document %s (will retry): %s", doc["id"], exc)
@@ -69,7 +69,7 @@ async def run_retention() -> dict:
     old = now_utc() - timedelta(hours=ORPHAN_UPLOAD_HOURS)
     async for pg in db.scan_pages.find({"created_at": {"$lt": old}}, {"_id": 0, "id": 1, "storage_key": 1}):
         try:
-            resolve(pg["storage_key"]).unlink(missing_ok=True)
+            await delete_file(pg["storage_key"])
             await db.scan_pages.delete_one({"id": pg["id"]})
         except OSError as exc:
             logger.error("retention: scan page %s not deleted (will retry): %s", pg["id"], exc)

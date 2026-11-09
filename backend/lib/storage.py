@@ -1,4 +1,4 @@
-"""Private document storage on local disk (Stage 1). Paths are always generated server-side;
+"""Private document storage in MongoDB GridFS (legacy keys: local disk). Keys are always generated server-side;
 files are never served statically — only through HMAC-signed, short-lived links."""
 
 import os
@@ -85,13 +85,59 @@ def count_pages(data: bytes, kind: str) -> int:
     return n
 
 
-def save_file(org_id: str, shop_id: str, data: bytes, kind: str) -> str:
-    key = f"{org_id}/{shop_id}/{uuid.uuid4().hex}.{kind}"
-    path = resolve(key)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(data)
-    os.chmod(path, 0o600)
-    return key
+GRIDFS_PREFIX = "gridfs:"
+
+
+def _bucket():
+    """Files live in MongoDB GridFS: shared by every backend instance and kept across restarts/redeploys
+    (the container disk is ephemeral — files written there vanished and showed up as 'Fichier supprimé')."""
+    from motor.motor_asyncio import AsyncIOMotorGridFSBucket
+    from lib.db import db
+    return AsyncIOMotorGridFSBucket(db, bucket_name="files")
+
+
+async def save_file(org_id: str, shop_id: str, data: bytes, kind: str) -> str:
+    file_id = await _bucket().upload_from_stream(f"{uuid.uuid4().hex}.{kind}", data,
+                                                 metadata={"org_id": org_id, "shop_id": shop_id, "kind": kind})
+    return f"{GRIDFS_PREFIX}{file_id}"
+
+
+def _gridfs_id(key: str):
+    from bson import ObjectId
+    from bson.errors import InvalidId
+    try:
+        return ObjectId(key[len(GRIDFS_PREFIX):])
+    except InvalidId as exc:
+        raise StorageError("Clé de fichier invalide") from exc
+
+
+async def read_file(key: str) -> bytes:
+    """Raises FileNotFoundError (an OSError) when the file really is gone."""
+    if key.startswith(GRIDFS_PREFIX):
+        from gridfs.errors import NoFile
+        try:
+            stream = await _bucket().open_download_stream(_gridfs_id(key))
+        except NoFile as exc:
+            raise FileNotFoundError(key) from exc
+        return await stream.read()
+    return resolve(key).read_bytes()  # legacy files written to local disk
+
+
+async def delete_file(key: str) -> None:
+    """Idempotent: an already-missing file is not an error. Real failures raise OSError so callers can retry."""
+    if key.startswith(GRIDFS_PREFIX):
+        from gridfs.errors import NoFile
+        try:
+            await _bucket().delete(_gridfs_id(key))
+        except NoFile:
+            pass
+        except Exception as exc:
+            raise OSError(f"suppression impossible : {exc}") from exc
+        return
+    try:
+        resolve(key).unlink(missing_ok=True)
+    except StorageError:
+        pass
 
 
 def resolve(key: str) -> Path:
@@ -99,13 +145,6 @@ def resolve(key: str) -> Path:
     if STORAGE_DIR not in path.parents:
         raise StorageError("Chemin invalide")
     return path
-
-
-def delete_file(key: str) -> None:
-    try:
-        resolve(key).unlink(missing_ok=True)
-    except StorageError:
-        pass
 
 
 def _convertapi_token() -> str:
