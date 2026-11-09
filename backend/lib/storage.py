@@ -6,15 +6,29 @@ import uuid
 from io import BytesIO
 from pathlib import Path
 
-from pypdf import PdfReader
+from pypdf import PdfReader, PdfWriter
 
 STORAGE_DIR = Path(os.environ.get("STORAGE_DIR", "/app/backend/storage_private")).resolve()
 MAX_BYTES = 25 * 1024 * 1024
 MAX_PAGES = 500
 
 
+MEDIA_TYPES = {"pdf": "application/pdf", "png": "image/png", "jpg": "image/jpeg"}
+
+
 class StorageError(ValueError):
     pass
+
+
+def extract_pages(data: bytes, pages: list[int]) -> bytes:
+    """New PDF containing only the given 1-based pages, in order (in memory, no temp file)."""
+    reader = PdfReader(BytesIO(data))
+    writer = PdfWriter()
+    for n in pages:
+        writer.add_page(reader.pages[n - 1])
+    out = BytesIO()
+    writer.write(out)
+    return out.getvalue()
 
 
 def detect_kind(data: bytes) -> str:

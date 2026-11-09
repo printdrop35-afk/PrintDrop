@@ -22,7 +22,7 @@ function MentionsLegales() {
         Forme juridique : {v(COMPANY_PENDING.legalForm, "forme juridique")}<br />
         Capital social : {v(COMPANY_PENDING.capital, "capital social, si applicable")}<br />
         Siège : <Address /><br />
-        SIREN : {formatSiren(COMPANY.siren)} — immatriculation : {COMPANY_PENDING.rcsCity ? `RCS ${COMPANY_PENDING.rcsCity}` : <Todo>RCS et greffe d'immatriculation, à vérifier</Todo>}<br />
+        Immatriculation : {COMPANY_PENDING.rcsCity ? `R.C.S. ${COMPANY_PENDING.rcsCity} ${formatSiren(COMPANY.siren)}` : <Todo>RCS et greffe d'immatriculation</Todo>}<br />
         N° TVA intracommunautaire : {v(COMPANY_PENDING.vatNumber, "numéro de TVA, si assujetti")}<br />
         Contact : {COMPANY_PENDING.publicEmail ?? "formulaire de la page Contact"}{COMPANY_PENDING.phone ? ` — ${COMPANY_PENDING.phone}` : ""}
       </p>
@@ -63,7 +63,14 @@ function Confidentialite() {
       </ul>
       <p><Todo>vérifier les transferts hors Union européenne et les garanties associées pour chaque prestataire</Todo></p>
       <h2>Durées de conservation</h2>
-      <p>Documents clients et commandes : {v(COMPANY_PENDING.documentRetention, "durée de conservation — aucune suppression automatique n'est configurée actuellement")}. Codes d'appairage : 24 heures maximum. Messages de contact : <Todo>durée</Todo>.</p>
+      <ul>
+        <li><strong>Documents envoyés par les clients</strong> : {COMPANY_PENDING.documentRetention}. Ils ne peuvent pas être téléchargés par la boutique : ils sont uniquement transmis à l'imprimante, et seules les pages choisies par le client sont envoyées.</li>
+        <li><strong>Nom, téléphone et e-mail du client</strong> : effacés en même temps que les documents. La commande reste conservée de façon anonyme (montant, date, statut) pour la comptabilité de la boutique.</li>
+        <li><strong>Fichiers envoyés sans commande validée</strong> : supprimés au bout de 24 heures.</li>
+        <li><strong>Codes d'appairage de l'agent</strong> : 24 heures maximum.</li>
+        <li><strong>Messages du formulaire de contact</strong> : <Todo>durée de conservation</Todo>.</li>
+      </ul>
+      <p>La suppression est automatique (vérification toutes les heures).</p>
       <h2>Vos droits</h2>
       <p>Vous pouvez demander l'accès, la rectification, l'effacement ou la limitation de vos données, et vous opposer à leur traitement, via la page Contact. Vous pouvez aussi saisir la CNIL (cnil.fr).</p>
       <h2>Sécurité</h2>
@@ -111,7 +118,7 @@ export default function LegalPage({ slug: forced }: { slug?: LegalSlug }) {
   const params = useParams();
   const slug = (forced ?? params.doc) as LegalSlug;
   const meta = LEGAL_LINKS.find((l) => l.slug === slug);
-  if (!meta) return <Navigate to="/apercu" replace />;
+  if (!meta) return <Navigate to="/" replace />;
   const Body = DOCS[slug];
   return (
     <div className="min-h-screen bg-background">

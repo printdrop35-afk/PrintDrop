@@ -3,8 +3,7 @@ import { Link } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
-import { usePreviewHref } from "@/components/brand/BrandPreview";
-import { COMPANY, LEGAL_LINKS, formatSiren } from "@/lib/brand";
+import { COMPANY, COMPANY_PENDING, LEGAL_LINKS, formatSiren } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -16,9 +15,8 @@ const NAV = [
 ];
 
 export function SiteHeader({ home = false }: { home?: boolean }) {
-  const href = usePreviewHref();
   const [open, setOpen] = useState(false);
-  const anchor = (h: string) => (home ? h : `${href("/")}${h}`);
+  const anchor = (h: string) => (home ? h : `/${h}`);
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-5 sm:px-8">
@@ -30,7 +28,7 @@ export function SiteHeader({ home = false }: { home?: boolean }) {
         </nav>
         <div className="hidden items-center gap-2 lg:flex">
           <Link to="/suivi" className="rounded-md px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:text-ink" data-testid="site-nav-track">Suivre une commande</Link>
-          <Link to={href("/connexion")} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-9")} data-testid="site-nav-login">Se connecter</Link>
+          <Link to={"/connexion"} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-9")} data-testid="site-nav-login">Se connecter</Link>
           <Link to="/inscription" className={cn(buttonVariants({ size: "sm" }), "h-9 px-4")} data-testid="nav-cta-trial">Essai gratuit</Link>
         </div>
         <button type="button" className="grid size-10 place-items-center rounded-lg text-ink lg:hidden" onClick={() => setOpen((o) => !o)} aria-label="Menu" aria-expanded={open} data-testid="site-nav-toggle">
@@ -43,7 +41,7 @@ export function SiteHeader({ home = false }: { home?: boolean }) {
             <a key={n.href} href={anchor(n.href)} onClick={() => setOpen(false)} className="block rounded-md px-2 py-2.5 text-sm font-medium text-ink">{n.label}</a>
           ))}
           <div className="mt-2 grid grid-cols-2 gap-2 border-t pt-3">
-            <Link to={href("/connexion")} className={buttonVariants({ variant: "outline" })}>Se connecter</Link>
+            <Link to={"/connexion"} className={buttonVariants({ variant: "outline" })}>Se connecter</Link>
             <Link to="/inscription" className={buttonVariants()}>Essai gratuit</Link>
           </div>
         </nav>
@@ -53,7 +51,6 @@ export function SiteHeader({ home = false }: { home?: boolean }) {
 }
 
 export function SiteFooter() {
-  const href = usePreviewHref();
   return (
     <footer className="bg-ink-2 text-slate-300" data-testid="site-footer">
       <div className="mx-auto grid max-w-7xl gap-10 px-5 py-14 sm:px-8 md:grid-cols-[1.3fr_1fr_1fr]">
@@ -70,16 +67,16 @@ export function SiteFooter() {
             {COMPANY.street}<br />
             {COMPANY.postalCode} {COMPANY.city}<br />
             {COMPANY.country}<br />
-            <span data-testid="footer-siren">RCS / SIREN : {formatSiren(COMPANY.siren)}</span>
+            <span data-testid="footer-siren">R.C.S. {COMPANY_PENDING.rcsCity} {formatSiren(COMPANY.siren)}</span>
           </address>
         </div>
         <div>
           <h2 className="text-xs font-semibold tracking-[0.15em] text-white uppercase">Informations</h2>
           <ul className="mt-4 space-y-2 text-sm">
             {LEGAL_LINKS.map((l) => (
-              <li key={l.slug}><Link to={href(`/${l.slug}`)} className="transition-colors hover:text-white" data-testid={`footer-link-${l.slug}`}>{l.label}</Link></li>
+              <li key={l.slug}><Link to={`/${l.slug}`} className="transition-colors hover:text-white" data-testid={`footer-link-${l.slug}`}>{l.label}</Link></li>
             ))}
-            <li><Link to={href("/contact")} className="transition-colors hover:text-white" data-testid="footer-link-contact">Contact</Link></li>
+            <li><Link to={"/contact"} className="transition-colors hover:text-white" data-testid="footer-link-contact">Contact</Link></li>
           </ul>
         </div>
       </div>

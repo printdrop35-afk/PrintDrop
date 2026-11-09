@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Banknote, CreditCard, ExternalLink, FileText, Inbox } from "lucide-react";
+import { Banknote, CreditCard, FileText, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -13,7 +13,7 @@ import { PaperStockDialog, PaperStrip } from "@/components/PaperStock";
 import { useDashboard } from "@/hooks/useDashboard";
 import { apiGet, apiPost, errorMessage } from "@/lib/api";
 import { formatDateTime, formatEUR, tk } from "@/i18n";
-import type { DownloadLinkOut, OrderOut, OrderPayIn, OrderStatus, ShopStatsOut } from "@/lib/types";
+import type { OrderOut, OrderPayIn, OrderStatus, ShopStatsOut } from "@/lib/types";
 
 const FILTERS = [
   { value: "active", label: "En cours" },
@@ -67,16 +67,6 @@ function OrderSheet({ order, onClose }: { order: OrderOut | null; onClose: () =>
     onSuccess: (res) => { refresh(res); toast.success(`Paiement de ${formatEUR(res.total_cents)} enregistré`); },
     onError: (e) => toast.error(errorMessage(e)),
   });
-  const openDoc = async (docId: string) => {
-    const win = window.open("", "_blank");
-    try {
-      const link = await apiPost<DownloadLinkOut>(`/orders/${o?.id}/documents/${docId}/link`);
-      if (win) win.location.href = link.url; else window.location.href = link.url;
-    } catch (e) {
-      win?.close();
-      toast.error(errorMessage(e, "Document indisponible"));
-    }
-  };
 
   return (
     <Sheet open={!!order} onOpenChange={(open) => !open && onClose()}>
@@ -101,12 +91,6 @@ function OrderSheet({ order, onClose }: { order: OrderOut | null; onClose: () =>
                         {l.filename ? `${l.label} · ` : ""}{l.pages} p.{l.copies > 1 ? ` × ${l.copies} ex.` : ""}
                         {l.options?.page_range ? ` · pages ${l.options.page_range}` : ""}{l.sheets ? ` · ${l.sheets} feuille(s)` : ""}
                       </p>
-                      {l.document_id && can("documents:read") && (
-                        <button type="button" onClick={() => openDoc(l.document_id as string)} data-testid={`order-line-${i}-open-doc`}
-                          className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold text-azure hover:underline">
-                          <ExternalLink className="size-3.5" /> Télécharger le document (lien sécurisé 5 min)
-                        </button>
-                      )}
                     </div>
                     <span className="font-mono text-sm">{formatEUR(l.subtotal_cents)}</span>
                   </li>
@@ -115,7 +99,12 @@ function OrderSheet({ order, onClose }: { order: OrderOut | null; onClose: () =>
                 <li className="flex justify-between bg-slate-50 p-3 font-semibold"><span>Total TTC</span><span className="font-mono" data-testid="order-detail-total">{formatEUR(o.total_cents)}</span></li>
               </ul>
 
-              {can("orders:update") && o.status === "pending" && <PrintDirect order={o} onDone={() => refresh({ ...o, status: "printing" })} />}
+              {o.purged_at && (
+                <p className="rounded-lg border bg-slate-50 p-3 text-xs text-muted-foreground" data-testid="order-purged-notice">
+                  Documents et coordonnées du client supprimés le {formatDateTime(o.purged_at)} (durée de conservation). La commande reste visible pour vos comptes.
+                </p>
+              )}
+              {can("orders:update") && o.status === "pending" && !o.purged_at && <PrintDirect order={o} onDone={() => refresh({ ...o, status: "printing" })} />}
               <PrintJobsPanel order={o} canReprint={can("jobs:reprint")} />
               <NotificationsPanel order={o} />
 

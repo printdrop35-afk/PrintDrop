@@ -6,7 +6,6 @@ import {
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
-import { usePreviewHref } from "@/components/brand/BrandPreview";
 import { ContactForm } from "@/pages/site/Contact";
 import { apiGet } from "@/lib/api";
 import { formatEUR } from "@/i18n";
@@ -45,7 +44,6 @@ const FAQ = [
 ];
 
 export default function LandingV2() {
-  const href = usePreviewHref();
   const plans = useQuery({ queryKey: ["public-plans"], queryFn: () => apiGet<PublicPlanOut[]>("/public/plans") });
   const planList = plans.isError ? [] : plans.data ?? [];
 
@@ -72,7 +70,7 @@ export default function LandingV2() {
                 <Link to="/inscription" className={cn(buttonVariants({ size: "lg" }), "h-12 px-6 text-base")} data-testid="hero-cta-trial">
                   Essai gratuit 14 jours <ArrowRight className="size-4" />
                 </Link>
-                <Link to={href("/contact?sujet=demo")} className={cn(buttonVariants({ variant: "outline", size: "lg" }), "h-12 px-6 text-base")} data-testid="hero-cta-demo">
+                <Link to={"/contact?sujet=demo"} className={cn(buttonVariants({ variant: "outline", size: "lg" }), "h-12 px-6 text-base")} data-testid="hero-cta-demo">
                   Réserver une démo
                 </Link>
               </div>
@@ -153,7 +151,7 @@ export default function LandingV2() {
                   <li key={t} className="flex gap-2"><CheckCircle2 className="size-4 shrink-0 text-[#08BBD0]" /> {t}</li>
                 ))}
               </ul>
-              <Link to={href("/s/cybercafe-bastille")} className={cn(buttonVariants({ size: "lg" }), "mt-8 h-12 bg-[#08BBD0] px-6 text-[#042F2E] hover:bg-[#069EAF]")} data-testid="qr-demo-open">
+              <Link to={"/s/cybercafe-bastille"} className={cn(buttonVariants({ size: "lg" }), "mt-8 h-12 bg-[#08BBD0] px-6 text-[#042F2E] hover:bg-[#069EAF]")} data-testid="qr-demo-open">
                 <Smartphone className="size-4" /> Ouvrir la boutique de démonstration
               </Link>
             </div>
@@ -236,7 +234,7 @@ export default function LandingV2() {
             <h2 className="max-w-xl font-heading text-3xl font-bold text-white">Modernisez votre comptoir dès aujourd'hui.</h2>
             <div className="flex flex-wrap gap-3">
               <Link to="/inscription" className={cn(buttonVariants({ size: "lg" }), "h-12 bg-white px-6 text-azure hover:bg-slate-100")} data-testid="cta-trial">Essai gratuit 14 jours</Link>
-              <Link to={href("/contact?sujet=demo")} className={cn(buttonVariants({ variant: "outline", size: "lg" }), "h-12 border-white/60 bg-transparent px-6 text-white hover:bg-white/10 hover:text-white")} data-testid="cta-demo">Réserver une démo</Link>
+              <Link to={"/contact?sujet=demo"} className={cn(buttonVariants({ variant: "outline", size: "lg" }), "h-12 border-white/60 bg-transparent px-6 text-white hover:bg-white/10 hover:text-white")} data-testid="cta-demo">Réserver une démo</Link>
             </div>
           </div>
         </section>

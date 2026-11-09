@@ -50,7 +50,9 @@ def test_full_agent_flow_and_no_duplicates(client):
     mine = [j for j in claimed if j["order_code"] == order["code"]]
     assert len(mine) == 1
     job = mine[0]
-    assert job["pages"] == [1, 2, 3] and job["download_url"].startswith("/api/files/")
+    assert job["pages"] == [1, 2, 3] and job["download_url"].startswith(f"/api/agent/jobs/{job['id']}/file")
+    f = agent.get(job["download_url"].removeprefix("/api"))
+    assert f.status_code == 200 and f.content.startswith(b"%PDF")
     # a second claim never hands out the same job
     assert all(j["id"] != job["id"] for j in agent.post("/agent/jobs/claim").json()["jobs"])
     # wrong lease is rejected

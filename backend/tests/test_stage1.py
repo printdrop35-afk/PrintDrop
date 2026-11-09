@@ -212,15 +212,12 @@ def test_order_lifecycle_and_counter_payment(client, operator_a):
     assert operator_a.post(f"/orders/{oid}/status", json={"status": "printing"}).status_code == 409  # terminal
 
 
-def test_signed_document_link(client, operator_a):
+def test_document_download_disabled(client, operator_a):
     order = place_order(client)
     o = find_order(operator_a, order["code"])
     doc_id = o["lines"][0]["document_id"]
-    link = operator_a.post(f"/orders/{o['id']}/documents/{doc_id}/link").json()["url"]
-    base = API_URL.removesuffix("/api")
-    r = httpx.get(base + link)
-    assert r.status_code == 200 and r.content.startswith(b"%PDF")
-    assert httpx.get(base + link.replace("sig=", "sig=0")).status_code == 403
+    r = operator_a.post(f"/orders/{o['id']}/documents/{doc_id}/link")
+    assert r.status_code == 403 and "IMPRIMER DIRECTEMENT" in r.json()["detail"]
     assert httpx.get(f"{API_URL}/files/{doc_id}?exp=9999999999&sig=abc").status_code == 403
 
 

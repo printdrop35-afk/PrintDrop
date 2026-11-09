@@ -21,7 +21,7 @@ export const COMPANY = {
   name: "PrintDrop",
   street: "2 Rue du Couesnon",
   postalCode: "35230",
-  city: "OREGRES", // ⚠ spelling to be verified by the owner before publication (supplied as-is)
+  city: "ORGÈRES", // confirmed by the owner
   country: "France",
   siren: "800646697",
 } as const;
@@ -30,13 +30,13 @@ export const COMPANY = {
 export const COMPANY_PENDING = {
   legalForm: null as string | null, // forme juridique
   capital: null as string | null, // capital social
-  rcsCity: null as string | null, // greffe d'immatriculation (RCS de …)
+  rcsCity: "Rennes" as string | null, // greffe d'immatriculation (RCS de …)
   vatNumber: null as string | null, // n° TVA intracommunautaire
   publicationDirector: null as string | null, // directeur de la publication
   publicEmail: null as string | null, // e-mail affiché publiquement
   phone: null as string | null,
   host: null as string | null, // hébergeur : nom, adresse, téléphone
-  documentRetention: null as string | null, // durée de conservation des documents clients
+  documentRetention: "supprimés dès que la commande est retirée ou annulée, et au plus tard 7 jours après la commande" as string | null,
 } as const;
 
 export const LEGAL_LINKS = [

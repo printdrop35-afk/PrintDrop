@@ -82,7 +82,7 @@ export interface OrderOut {
   customer_email: string | null; notify: boolean; note: string; lines: QuoteLine[]; total_cents: number;
   total_ht_cents: number | null; vat_cents: number | null; vat_rate_bp: number | null; discount_cents: number; currency: string; status: OrderStatus;
   payment_status: PaymentStatus; payment_method: string | null; paid_at: string | null;
-  created_at: string; updated_at: string; history: StatusEvent[];
+  created_at: string; updated_at: string; history: StatusEvent[]; purged_at?: string | null;
 }
 export interface OrderStatusIn { status: OrderStatus }
 export interface OrderPayIn { method: "cash" | "card_terminal" }

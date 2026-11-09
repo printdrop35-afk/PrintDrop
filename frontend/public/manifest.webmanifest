@@ -1,0 +1,15 @@
+{
+  "name": "PrintDrop",
+  "short_name": "PrintDrop",
+  "description": "Gestion des commandes d'impression par QR code",
+  "lang": "fr",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F4F7FC",
+  "theme_color": "#09265C",
+  "icons": [
+    { "src": "/printdrop-app-icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/printdrop-app-icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/brand/printdrop-app-icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

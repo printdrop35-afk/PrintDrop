@@ -6,6 +6,7 @@ import uuid
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from lib.authz import audit, now_utc, request_origin
@@ -13,7 +14,8 @@ from lib.db import db
 from lib.pricing import parse_page_range
 from lib.notify import alert_owner
 from lib.printing import CLAIM_LEASE_SECONDS, PRINT_LEASE_SECONDS, maybe_complete_order
-from lib.security import sha256, sign_file_link
+from lib.security import sha256
+from lib.storage import MEDIA_TYPES, StorageError, extract_pages, resolve
 from models.schemas import (
     AgentClaimOut, AgentCommandResultIn, AgentHeartbeatIn, AgentHeartbeatOut, AgentJobOut, AgentPairIn, AgentPairOut, AgentReportIn, AgentReportOut,
 )
@@ -143,11 +145,12 @@ async def claim(a: AgentPrincipal = Depends(get_agent)):
         if not doc:
             await db.print_jobs.update_one({"id": job["id"]}, {"$set": {"status": "failed", "error": "Document supprimé"}})
             continue
-        exp, sig = sign_file_link(doc["id"], ttl_seconds=CLAIM_LEASE_SECONDS)
+        selected = parse_page_range(job["options"].get("page_range", ""), doc["page_count"])
         jobs.append(AgentJobOut(
             id=job["id"], lease_id=lease_id, order_code=job["order_code"], kind=job["kind"], filename=job["filename"],
-            file_kind=doc["kind"], options=job["options"], pages=parse_page_range(job["options"].get("page_range", ""), doc["page_count"]),
-            printer_name=printer, download_url=f"/api/files/{doc['id']}?exp={exp}&sig={sig}",
+            # the agent receives a file that contains ONLY the selected pages, so it prints the whole file
+            file_kind=doc["kind"], options=job["options"], pages=list(range(1, len(selected) + 1)) if doc["kind"] == "pdf" else [1],
+            printer_name=printer, download_url=f"/api/agent/jobs/{job['id']}/file?lease={lease_id}",
         ))
     return AgentClaimOut(jobs=jobs)
 
@@ -189,3 +192,26 @@ async def report(job_id: str, body: AgentReportIn, request: Request, a: AgentPri
     if body.status == "printed":
         await maybe_complete_order(job["order_id"], a.org_id, f"Agent {a.name}", request_origin(request))
     return AgentReportOut(job_id=job_id, status=update["status"])
+
+
+@router.get("/jobs/{job_id}/file")
+async def job_file(job_id: str, lease: str, a: AgentPrincipal = Depends(get_agent)):
+    """The document of a job this agent currently holds — reduced to the pages the customer selected."""
+    job = await db.print_jobs.find_one({"id": job_id, "org_id": a.org_id, "agent_id": a.agent_id, "lease_id": lease,
+                                        "status": {"$in": ["claimed", "printing"]}}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Travail introuvable ou bail expiré")
+    doc = await db.documents.find_one({"id": job["document_id"], "org_id": a.org_id}, {"_id": 0})
+    if not doc or not doc.get("storage_key"):
+        raise HTTPException(status_code=404, detail="Document supprimé")
+    try:
+        data = resolve(doc["storage_key"]).read_bytes()
+    except (StorageError, OSError) as exc:
+        raise HTTPException(status_code=404, detail="Fichier supprimé") from exc
+    if doc["kind"] == "pdf":
+        pages = parse_page_range(job["options"].get("page_range", ""), doc["page_count"])
+        if len(pages) < doc["page_count"]:
+            data = extract_pages(data, pages)
+    await audit("job.file", org_id=a.org_id, resource_type="print_job", resource_id=job_id, actor=f"agent:{a.name}",
+                details={"pages": job["options"].get("page_range", "") or "toutes"})
+    return Response(data, media_type=MEDIA_TYPES[doc["kind"]], headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})

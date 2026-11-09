@@ -90,8 +90,15 @@ backend/tests/test_stage1.py — auth, pricing, upload validation, token binding
 - GitHub workflow signs PrintDrop.exe + installer with signtool when repo secrets WINDOWS_CERT_PFX_BASE64 / WINDOWS_CERT_PASSWORD exist; otherwise unsigned build + warning. Publishes Release agent-v<version> with stable PrintDrop-Setup.exe.
 - Tests: backend/tests/test_agent_release.py.
 
-## Brand v2 (official logo) — PREVIEW ONLY, awaiting owner approval
+## Brand v2 (official logo) — LIVE (approved)
 - Assets: brand/build_brand.py → frontend/public/brand/ (SVG + PNG: light, dark, mono, icon, app icons, favicons in brand/favicon/, OG image). Source: brand/source/logo-original.webp (already transparent).
 - Config: src/lib/brand.ts (BRAND, COMPANY — address « OREGRES » to verify, SIREN 800646697; COMPANY_PENDING = missing legal info, rendered « À compléter »).
-- Theme: brand tokens are non-inline @theme vars; html.brand-v2 overrides them (index.css). /apercu/* routes (BrandPreview) render real pages with v2: /apercu, /apercu/connexion, /apercu/dashboard, /apercu/s/:slug, /apercu/contact, /apercu/{mentions-legales|confidentialite|cgu|cookies}. Live routes unchanged.
+- Theme: brand tokens are non-inline @theme vars; <html class="brand-v2"> (index.html) applies the official palette everywhere. Public site: / (LandingV2), /contact, /mentions-legales, /confidentialite, /cgu, /cookies. Old /apercu/* links redirect. Company: ORGÈRES, R.C.S. Rennes 800 646 697.
 - New API: GET /api/public/plans, POST /api/public/contact (stores db.contact_messages, emails CONTACT_EMAIL=contact@printdrop.fr, honeypot + 5/h/IP).
+
+## Privacy: no downloads, selected pages only, retention
+- POST /api/orders/{id}/documents/{doc}/link → 403 (downloads disabled; print only via « IMPRIMER DIRECTEMENT »).
+- Agent fetches GET /api/agent/jobs/{job_id}/file?lease=… (agent key + own active lease): PDF reduced to the customer's page_range (pypdf, in memory); job.pages renumbered 1..n.
+- lib/retention.py: on picked_up/cancelled → purge_order (files deleted, documents.status=purged, customer_name « Client anonymisé », phone/email/note cleared, order.purged_at). Hourly cron /api/cron/retention also purges orders older than 7 days and orphan uploads > 24 h. Amounts/status kept for reports.
+- crons.yml fixed: all entries use `cron:` (subscriptions-sweep previously used the invalid `schedule:` key).
+- Tests: backend/tests/test_retention_pages.py.

@@ -185,3 +185,16 @@ async def cron_daily_report(request: Request, authorization: str = Header(defaul
             return {"status": "duplicate"}
     asyncio.create_task(_run_daily_reports(request_origin(request)))
     return {"status": "accepted"}
+
+
+@router.post("/cron/retention")
+async def cron_retention(authorization: str = Header(default="")):
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    """Hourly: erase documents + customer identity of collected/cancelled orders and of orders older than 7 days (idempotent)."""
+    secret = os.environ.get("WEBHOOK_CRON_SECRET", "")
+    token = authorization.removeprefix("Bearer ").strip() if authorization.startswith("Bearer ") else ""
+    if not secret or not token or not hmac.compare_digest(token, secret):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    from lib.retention import run_retention
+    asyncio.create_task(run_retention())
+    return {"status": "accepted"}

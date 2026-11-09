@@ -12,7 +12,7 @@ export function AuthShell({ title, subtitle, children, aside }: { title: string;
         <div className="absolute inset-0 bg-gradient-to-br from-ink via-ink/90 to-ink-2/70" />
         <div className="relative"><Logo inverse /></div>
         <div className="relative max-w-md animate-rise">{aside}</div>
-        <p className="relative text-xs text-slate-400">© {new Date().getFullYear()} PrintDrop · Hébergé en Europe</p>
+        <p className="relative text-xs text-slate-400">© {new Date().getFullYear()} PrintDrop</p>
       </aside>
       <main className="flex flex-col px-6 py-10 sm:px-12">
         <div className="lg:hidden"><Logo /></div>

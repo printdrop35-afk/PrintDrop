@@ -15,7 +15,7 @@ from lib.platform import shop_vat_bp
 from lib.pricing import finalize, price_extras, price_print, price_services, public_pricing
 from lib.security import new_secret_token, sha256, verify_file_link
 import asyncio
-from lib.storage import docx_to_pdf, MAX_BYTES, StorageError, count_pages, detect_kind, resolve, save_file
+from lib.storage import MEDIA_TYPES, docx_to_pdf, MAX_BYTES, StorageError, count_pages, detect_kind, resolve, save_file
 from models.schemas import (
     DocumentUploadOut, OrderCreateIn, OrderPublicOut, PublicShopOut, QuoteIn, QuoteOut, TrackIn,
 )
@@ -23,7 +23,6 @@ from models.schemas import (
 router = APIRouter(tags=["public"])
 
 CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
-MEDIA_TYPES = {"pdf": "application/pdf", "png": "image/png", "jpg": "image/jpeg"}
 
 
 def phone_digits(phone: str) -> str:

@@ -51,7 +51,7 @@ export function PrintDirect({ order, onDone }: { order: OrderOut; onDone: () => 
           </li>
         ))}
       </ul>}
-      <p className="text-[11px] text-muted-foreground">L'impression directe et « Télécharger le document » sont indépendants. Le statut affiché est celui remonté par Windows et le pilote.</p>
+      <p className="text-[11px] text-muted-foreground">Seules les pages choisies par le client sont envoyées à l'imprimante. Le statut affiché est celui remonté par Windows et le pilote.</p>
     </div>
   );
 }

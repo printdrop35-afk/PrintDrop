@@ -11,11 +11,12 @@ from fastapi.responses import Response
 from lib.authz import ROLE_RANK, Principal, TenantRepo, audit, now_utc, request_origin, require_tenant, tenant_repo
 from lib.notify import enqueue_ready
 from lib.printing import enqueue_initial_jobs
+from lib.retention import purge_order
 from lib.billing import enforce_limit
 from lib.platform import shop_vat_bp
 from lib.pricing import PAPER_LABELS, SERVICE_CATEGORIES, UNIT_LABELS, ht_from_ttc, new_id
 from lib.db import db
-from lib.security import hash_password, sign_file_link
+from lib.security import hash_password
 from models.schemas import (
     AuditOut, DownloadLinkOut, OrderOut, OrderPayIn, OrderStatusIn, Pricing, ShopCreateIn, ShopOut,
     ShopStatsOut, ShopUpdateIn, StaffCreateIn, StaffOut, StaffUpdateIn,
@@ -200,6 +201,9 @@ async def change_status(order_id: str, body: OrderStatusIn, request: Request, p:
     elif target == "cancelled":
         await repo.update_many("print_jobs", {"order_id": order_id, "status": {"$in": ["queued", "claimed"]}},
                                {"$set": {"status": "cancelled", "updated_at": now}})
+    if target in ("picked_up", "cancelled"):  # retention: erase files + customer identity right away
+        await purge_order(order_id)
+        updated = await get_order_or_404(repo, order_id)
     return updated
 
 
@@ -232,9 +236,8 @@ async def document_link(order_id: str, doc_id: str, p: Principal = Depends(requi
     doc = await repo.find_one("documents", {"id": doc_id, "order_id": order_id})
     if not doc:
         raise HTTPException(status_code=404, detail="Document introuvable")
-    exp, sig = sign_file_link(doc_id)
-    await audit("document.link", principal=p, resource_type="document", resource_id=doc_id, details={"order_id": order_id})
-    return DownloadLinkOut(url=f"/api/files/{doc_id}?exp={exp}&sig={sig}", expires_at=exp)
+    await audit("document.link", principal=p, resource_type="document", resource_id=doc_id, outcome="deny", details={"order_id": order_id})
+    raise HTTPException(status_code=403, detail="Le téléchargement des documents est désactivé : utilisez « IMPRIMER DIRECTEMENT ».")
 
 
 # ---------- staff ----------

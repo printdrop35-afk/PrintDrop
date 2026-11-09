@@ -317,6 +317,7 @@ class OrderOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     history: list[StatusEvent]
+    purged_at: datetime | None = None  # documents + customer identity erased (retention)
 
 
 class OrderStatusIn(BaseModel):

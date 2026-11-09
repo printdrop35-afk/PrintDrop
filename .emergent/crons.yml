@@ -9,8 +9,16 @@ crons:
     enabled: true
   - name: subscriptions-sweep
     description: "Chaque matin à 8h (Paris) : met à jour les statuts d'abonnement et envoie les rappels de renouvellement (J-3, expiration)."
-    schedule: "0 8 * * *"
+    cron: "0 8 * * *"
     timezone: "Europe/Paris"
     endpoint: "{{BASE_URL}}/api/cron/subscriptions-sweep"
+    method: POST
+    enabled: true
+  - name: retention
+    description: "Toutes les heures : supprime les documents et le nom/téléphone des clients des commandes retirées ou annulées, et de toute commande de plus de 7 jours."
+    cron: "0 * * * *"
+    timezone: "Europe/Paris"
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    endpoint: "{{BASE_URL}}/api/cron/retention"
     method: POST
     enabled: true
