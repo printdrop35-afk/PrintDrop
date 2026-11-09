@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useDashboard } from "@/hooks/useDashboard";
+import { BRAND } from "@/lib/brand";
 import { ME_KEY } from "@/hooks/useMe";
 import { apiPatch, apiPost, errorMessage } from "@/lib/api";
 import type { ShopCreateIn, ShopOut, ShopUpdateIn } from "@/lib/types";
@@ -101,6 +102,7 @@ export default function ShopSettings() {
 
         <section>
           <div className="print-area rounded-3xl border-2 border-ink bg-white p-8 text-center shadow-xl" data-testid="qr-poster">
+            <img src={BRAND.logo.light} alt="PrintDrop" width={180} height={60} className="mx-auto mb-5 h-12 w-auto select-none" draggable={false} data-testid="qr-poster-logo" />
             <p className="text-xs font-semibold tracking-[0.2em] text-azure uppercase">Impression sans contact</p>
             <h2 className="mt-2 text-3xl font-bold text-ink">{form.name}</h2>
             <div className="mx-auto mt-6 w-fit rounded-2xl border bg-white p-4">
@@ -111,7 +113,7 @@ export default function ShopSettings() {
                 <li key={s}><span className="mx-auto grid size-7 place-items-center rounded-full bg-ink font-mono text-xs text-white">{i + 1}</span><span className="mt-1.5 block font-medium text-ink">{s}</span></li>
               ))}
             </ol>
-            <p className="mt-6 text-xs text-slate-500">Propulsé par PrintDrop</p>
+            <p className="mt-6 text-xs text-slate-500">printdrop.fr</p>
           </div>
           <Button className="mt-4 w-full" onClick={() => window.print()} data-testid="print-qr-poster-button"><Printer className="size-4" /> Imprimer l'affiche</Button>
         </section>

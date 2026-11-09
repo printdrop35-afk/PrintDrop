@@ -246,8 +246,6 @@ export default function CustomerPortal() {
             <section className="rounded-2xl border bg-white px-4 py-2 shadow-sm" data-testid="services-section">
               <p className="pt-2 text-xs font-semibold tracking-[0.15em] text-slate-500 uppercase">Services au comptoir</p>
               <div className="divide-y">
-                {shop.pricing.photocopy.active && svc("photocopy_bw", "Photocopies N&B", shop.pricing.photocopy.bw, Copy)}
-                {shop.pricing.photocopy.active && svc("photocopy_color", "Photocopies couleur", shop.pricing.photocopy.color, Copy)}
                 {svc("scan_pages", "Numérisation (scan)", shop.pricing.scan_cents, ScanLine)}
                 {shop.pricing.services.map((s) => (
                   <div key={s.id} className="flex items-center justify-between gap-3 py-3" data-testid={`extra-${s.id}`}>

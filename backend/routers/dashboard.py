@@ -175,6 +175,19 @@ async def list_orders(shop_id: str, status: str | None = None, p: Principal = De
     return await repo.find("orders", f, sort=[("created_at", -1)], limit=300)
 
 
+@router.get("/shops/{shop_id}/orders/by-code/{code}", response_model=OrderOut)
+async def order_by_code(shop_id: str, code: str, p: Principal = Depends(require_tenant("orders:read"))):
+    """Counter scan: the in-progress order of THIS shop with this code (else the most recent one)."""
+    repo = tenant_repo(p)
+    await get_shop_or_404(repo, shop_id)
+    c = code.strip().upper()
+    found = (await repo.find("orders", {"shop_id": shop_id, "code": c, "status": {"$in": ["pending", "printing", "ready"]}}, limit=1)
+             or await repo.find("orders", {"shop_id": shop_id, "code": c}, sort=[("created_at", -1)], limit=1))
+    if not found:
+        raise HTTPException(status_code=404, detail="Aucune commande avec ce code dans cette boutique")
+    return found[0]
+
+
 @router.get("/orders/{order_id}", response_model=OrderOut)
 async def get_order(order_id: str, p: Principal = Depends(require_tenant("orders:read"))):
     return await get_order_or_404(tenant_repo(p), order_id)

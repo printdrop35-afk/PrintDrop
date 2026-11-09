@@ -122,3 +122,9 @@ backend/tests/test_stage1.py — auth, pricing, upload validation, token binding
 - Pickup: picked_up requires confirm_code == order code (QR on ticket encodes it); mismatch → 409 + audit order.pickup_mismatch.
 - Retention: files deleted only when picked_up/cancelled (lib/retention.py); order data incl. name/phone/email kept; failures logged + retried by hourly cron; old links → 410.
 - Pickup ticket (components/PickupTicket.tsx): official logo, 4-digit code, QR, shop, prints alone (.pd-print-area).
+
+## Counter flow v4
+- Customer portal « Services au comptoir »: photocopies N&B/couleur removed; public quote/order with photocopy_* > 0 → 422 (photocopy pricing still editable in Tarifs, used at the counter only).
+- Order sheet: « Étape 1 — Statut de la commande » then « Étape 2 — Mode de paiement » (Espèce / Carte), payment disabled while status is pending.
+- Orders page « Code client » scan box → GET /api/shops/{shop_id}/orders/by-code/{code} (tenant-scoped, in-progress order first). The scanned/confirmed code is kept for that order in page state (one transaction); pickup reuses it instead of prompting again; next scan replaces it. Backend still requires confirm_code for picked_up.
+- QR poster (Boutique & QR code) shows the official logo above the QR; pickup ticket already had it.

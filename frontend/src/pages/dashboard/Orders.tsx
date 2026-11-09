@@ -44,7 +44,7 @@ function Kpi({ label, value, tone, testId }: { label: string; value: string | nu
   );
 }
 
-function OrderSheet({ order, onClose }: { order: OrderOut | null; onClose: () => void }) {
+function OrderSheet({ order, onClose, verifiedCode, onVerified }: { order: OrderOut | null; onClose: () => void; verifiedCode: string | null; onVerified: (orderId: string, code: string) => void }) {
   const { can, shop } = useDashboard();
   const qc = useQueryClient();
   const refresh = (o: OrderOut) => {
@@ -63,7 +63,12 @@ function OrderSheet({ order, onClose }: { order: OrderOut | null; onClose: () =>
 
   const status = useMutation({
     mutationFn: ({ to, confirm_code = "" }: { to: OrderStatus; confirm_code?: string }) => apiPost<OrderOut>(`/orders/${o?.id}/status`, { status: to, confirm_code }),
-    onSuccess: (res) => { refresh(res); setPickup(false); setPickupCode(""); toast.success(`Commande ${res.code} : ${tk("status", res.status)}`); },
+    onSuccess: (res, vars) => {
+      refresh(res);
+      if (vars.confirm_code) onVerified(res.id, vars.confirm_code); // verified once for this transaction
+      setPickup(false); setPickupCode("");
+      toast.success(`Commande ${res.code} : ${tk("status", res.status)}`);
+    },
     onError: (e) => toast.error(errorMessage(e)),
   });
   const pay = useMutation({
@@ -115,27 +120,29 @@ function OrderSheet({ order, onClose }: { order: OrderOut | null; onClose: () =>
               <PrintJobsPanel order={o} canReprint={can("jobs:reprint")} />
               <NotificationsPanel order={o} />
 
-              {o.payment_status === "unpaid" && o.status !== "cancelled" && can("orders:pay") && (
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold tracking-[0.15em] text-slate-500 uppercase">Encaisser au comptoir</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button variant="outline" className="h-11" disabled={pay.isPending} onClick={() => pay.mutate({ method: "cash" })} data-testid="mark-paid-cash-button"><Banknote className="size-4" /> Espèces</Button>
-                    <Button variant="outline" className="h-11" disabled={pay.isPending} onClick={() => pay.mutate({ method: "card_terminal" })} data-testid="mark-paid-card-button"><CreditCard className="size-4" /> Carte (TPE)</Button>
-                  </div>
-                </div>
-              )}
-              {o.paid_at && <p className="text-sm text-emerald-700" data-testid="order-paid-info">Payé le {formatDateTime(o.paid_at)} · {tk("method", o.payment_method ?? "cash")}</p>}
-
               {can("orders:update") && NEXT[o.status].length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold tracking-[0.15em] text-slate-500 uppercase">Statut</p>
+                  <p className="text-xs font-semibold tracking-[0.15em] text-slate-500 uppercase" data-testid="step-status-title">Étape 1 — Statut de la commande</p>
                   <div className="flex flex-wrap gap-2">
                     {NEXT[o.status].map((n) => (
-                      <Button key={n.to} variant={n.variant ?? "default"} disabled={status.isPending} onClick={() => (n.to === "picked_up" ? setPickup(true) : status.mutate({ to: n.to }))} data-testid={`order-status-${n.to}-button`}>{n.label}</Button>
+                      <Button key={n.to} variant={n.variant ?? "default"} disabled={status.isPending} onClick={() => (n.to !== "picked_up" ? status.mutate({ to: n.to }) : verifiedCode ? status.mutate({ to: "picked_up", confirm_code: verifiedCode }) : setPickup(true))} data-testid={`order-status-${n.to}-button`}>{n.label}</Button>
                     ))}
                   </div>
                 </div>
               )}
+
+              {o.payment_status === "unpaid" && o.status !== "cancelled" && can("orders:pay") && (
+                <div className="space-y-2" data-testid="step-payment">
+                  <p className="text-xs font-semibold tracking-[0.15em] text-slate-500 uppercase" data-testid="step-payment-title">Étape 2 — Mode de paiement</p>
+                  {o.status === "pending" && <p className="text-xs text-muted-foreground" data-testid="step-payment-hint">Choisissez d'abord le statut de la commande (étape 1).</p>}
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button variant="outline" className="h-11" disabled={pay.isPending || o.status === "pending"} onClick={() => pay.mutate({ method: "cash" })} data-testid="mark-paid-cash-button"><Banknote className="size-4" /> Espèce</Button>
+                    <Button variant="outline" className="h-11" disabled={pay.isPending || o.status === "pending"} onClick={() => pay.mutate({ method: "card_terminal" })} data-testid="mark-paid-card-button"><CreditCard className="size-4" /> Carte</Button>
+                  </div>
+                </div>
+              )}
+              {o.paid_at && <p className="text-sm text-emerald-700" data-testid="order-paid-info">Payé le {formatDateTime(o.paid_at)} · {tk("method", o.payment_method ?? "cash")}</p>}
+              {verifiedCode && o.status === "ready" && <p className="text-xs text-emerald-700" data-testid="order-code-verified">Code client {verifiedCode} déjà vérifié pour cette transaction : le retrait ne le redemandera pas.</p>}
 
               {pickup && (
                 <form className="space-y-2 rounded-xl border border-emerald-300 bg-emerald-50 p-3" data-testid="pickup-confirm"
@@ -172,6 +179,14 @@ export default function Orders() {
   const [paperOpen, setPaperOpen] = useState(false);
   const [filter, setFilter] = useState("active");
   const [selected, setSelected] = useState<OrderOut | null>(null);
+  // code scanned/typed at the counter: kept for the current transaction only, replaced by the next scan
+  const [verified, setVerified] = useState<{ orderId: string; code: string } | null>(null);
+  const [scan, setScan] = useState("");
+  const lookup = useMutation({
+    mutationFn: (code: string) => apiGet<OrderOut>(`/shops/${shop.id}/orders/by-code/${encodeURIComponent(code)}`),
+    onSuccess: (o, code) => { setVerified({ orderId: o.id, code: code.trim() }); setSelected(o); setScan(""); },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
 
   const stats = useQuery({ queryKey: ["stats", shop.id], queryFn: () => apiGet<ShopStatsOut>(`/shops/${shop.id}/stats`), refetchInterval: 15_000 });
   const orders = useQuery({
@@ -191,6 +206,14 @@ export default function Orders() {
         </div>
         <p className="text-xs text-muted-foreground">Actualisation automatique toutes les 10 s</p>
       </div>
+
+      <form className="flex flex-wrap items-center gap-2 rounded-2xl border bg-card p-3" data-testid="order-scan-form"
+        onSubmit={(e) => { e.preventDefault(); if (scan.trim()) lookup.mutate(scan.trim()); }}>
+        <Input value={scan} onChange={(e) => setScan(e.target.value)} placeholder="Code client — scannez le QR code ou saisissez les 4 chiffres"
+          inputMode="numeric" className="h-10 max-w-md flex-1 font-mono" data-testid="order-scan-input" aria-label="Code client" />
+        <Button type="submit" disabled={!scan.trim() || lookup.isPending} data-testid="order-scan-submit">Ouvrir la commande</Button>
+        <span className="text-xs text-muted-foreground">Le code n'est demandé qu'une fois par transaction.</span>
+      </form>
 
       <AlertsBanner shopId={shop.id} onPaper={() => setPaperOpen(true)} onOpenOrder={async (id) => setSelected(await apiGet<OrderOut>(`/orders/${id}`))} />
 
@@ -242,7 +265,9 @@ export default function Orders() {
           </Table>
         )}
       </div>
-      <OrderSheet order={selected} onClose={() => setSelected(null)} />
+      <OrderSheet order={selected} onClose={() => setSelected(null)}
+        verifiedCode={selected && verified?.orderId === selected.id ? verified.code : null}
+        onVerified={(orderId, code) => setVerified({ orderId, code })} />
     </div>
   );
 }

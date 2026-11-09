@@ -51,6 +51,8 @@ async def build_quote(shop: dict, body: QuoteIn) -> dict:
             lines.append(price_print(shop["pricing"], doc["filename"], doc["id"], doc["page_count"], item.options.model_dump()))
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=f"{doc['filename']} : {exc}") from exc
+    if body.services.photocopy_bw or body.services.photocopy_color:
+        raise HTTPException(status_code=422, detail="Les photocopies ne sont pas proposées en ligne : demandez-les directement au comptoir")
     try:
         lines.extend(price_services(shop["pricing"], body.services.model_dump()))
         lines.extend(price_extras(shop["pricing"], [e.model_dump() for e in body.extras]))
