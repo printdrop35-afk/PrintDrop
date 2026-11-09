@@ -880,3 +880,21 @@ class ContactIn(BaseModel):
 class ContactOut(BaseModel):
     ok: bool
     delivered: bool  # False = stored but not e-mailed (email not configured or failed)
+
+
+class ContactMessageOut(BaseModel):
+    id: str
+    kind: Literal["contact", "demo"]
+    name: str
+    business: str
+    email: str
+    subject: str
+    message: str
+    created_at: datetime
+    delivered: bool
+    handled: bool = False
+    handled_at: datetime | None = None
+
+
+class ContactMessageUpdateIn(BaseModel):
+    handled: bool

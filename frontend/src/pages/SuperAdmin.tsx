@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Logo } from "@/components/Logo";
 import { AdminBilling, SubscriptionCell } from "@/components/AdminBilling";
 import { AgentReleaseAdmin } from "@/components/AgentReleaseAdmin";
+import { ContactInbox } from "@/components/ContactInbox";
 import { useMe } from "@/hooks/useMe";
 import { apiGet, apiPatch, errorMessage } from "@/lib/api";
 import { endSession } from "@/lib/session";
@@ -98,6 +99,7 @@ export default function SuperAdmin() {
           </Table>
         </section>
 
+        <ContactInbox />
         <AdminBilling />
         <AgentReleaseAdmin />
 

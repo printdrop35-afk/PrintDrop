@@ -9,7 +9,7 @@ from lib.agent_release import RELEASE_ID, get_release
 from lib.authz import Principal, audit, now_utc, require_platform
 from lib.billing import subscription_view
 from lib.db import db
-from models.schemas import AdminOrgOut, AdminOrgUpdateIn, AdminStatsOut, AgentReleaseIn, AgentReleaseOut, AuditOut
+from models.schemas import AdminOrgOut, AdminOrgUpdateIn, AdminStatsOut, AgentReleaseIn, AgentReleaseOut, AuditOut, ContactMessageOut, ContactMessageUpdateIn
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -92,3 +92,18 @@ async def set_agent_release(body: AgentReleaseIn, p: Principal = Depends(require
     await audit("platform.agent_release", principal=p, resource_type="agent_release",
                 resource_id=RELEASE_ID, details={"url": url, "version": body.version})
     return await get_release()
+
+
+@router.get("/contact-messages", response_model=list[ContactMessageOut])
+async def contact_messages(_: Principal = Depends(require_platform("platform:read"))):
+    """Contact & demo requests from the public site (also e-mailed to CONTACT_EMAIL when possible)."""
+    return await db.contact_messages.find({}, {"_id": 0, "ip": 0}).sort("created_at", -1).to_list(300)
+
+
+@router.patch("/contact-messages/{message_id}", response_model=ContactMessageOut)
+async def update_contact_message(message_id: str, body: ContactMessageUpdateIn, p: Principal = Depends(require_platform("platform:manage"))):
+    res = await db.contact_messages.update_one({"id": message_id}, {"$set": {"handled": body.handled, "handled_at": now_utc() if body.handled else None}})
+    if not res.matched_count:
+        raise HTTPException(status_code=404, detail="Message introuvable")
+    await audit("platform.contact_handled", principal=p, resource_type="contact_message", resource_id=message_id, details={"handled": body.handled})
+    return await db.contact_messages.find_one({"id": message_id}, {"_id": 0, "ip": 0})

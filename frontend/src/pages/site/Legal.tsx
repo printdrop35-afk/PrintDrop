@@ -9,8 +9,6 @@ function Todo({ children }: { children: ReactNode }) {
   return <mark className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-900" data-testid="legal-todo">[À compléter : {children}]</mark>;
 }
 
-const v = (value: string | null, label: string) => (value ? value : <Todo>{label}</Todo>);
-
 const Address = () => <>{COMPANY.street}, {COMPANY.postalCode} {COMPANY.city}, {COMPANY.country}</>;
 
 function MentionsLegales() {
@@ -19,17 +17,10 @@ function MentionsLegales() {
       <h2>Éditeur du site</h2>
       <p>
         <strong>{COMPANY.name}</strong><br />
-        Forme juridique : {v(COMPANY_PENDING.legalForm, "forme juridique")}<br />
-        Capital social : {v(COMPANY_PENDING.capital, "capital social, si applicable")}<br />
         Siège : <Address /><br />
         Immatriculation : {COMPANY_PENDING.rcsCity ? `R.C.S. ${COMPANY_PENDING.rcsCity} ${formatSiren(COMPANY.siren)}` : <Todo>RCS et greffe d'immatriculation</Todo>}<br />
-        N° TVA intracommunautaire : {v(COMPANY_PENDING.vatNumber, "numéro de TVA, si assujetti")}<br />
         Contact : {COMPANY_PENDING.publicEmail ?? "formulaire de la page Contact"}{COMPANY_PENDING.phone ? ` — ${COMPANY_PENDING.phone}` : ""}
       </p>
-      <h2>Directeur de la publication</h2>
-      <p>{v(COMPANY_PENDING.publicationDirector, "nom du directeur de la publication")}</p>
-      <h2>Hébergement</h2>
-      <p>{v(COMPANY_PENDING.host, "nom, adresse et téléphone de l'hébergeur")}</p>
       <h2>Propriété intellectuelle</h2>
       <p>La marque, le logo PrintDrop et les contenus du site sont protégés. Toute reproduction sans autorisation est interdite.</p>
     </>
@@ -43,7 +34,7 @@ function Confidentialite() {
       <h2>Responsables du traitement</h2>
       <p>
         Pour les comptes des boutiques et le site : {COMPANY.name} (<Address />). Pour les commandes passées dans une boutique, la boutique
-        concernée détermine l'usage des données de ses clients ; PrintDrop agit alors pour son compte. <Todo>qualification juridique à valider (responsable / sous-traitant)</Todo>
+        concernée détermine l'usage des données de ses clients ; PrintDrop agit alors pour son compte.
       </p>
       <h2>Données traitées</h2>
       <ul>
@@ -54,14 +45,6 @@ function Confidentialite() {
       </ul>
       <h2>Finalités</h2>
       <p>Gérer les commandes d'impression, prévenir le client quand sa commande est prête (s'il l'a accepté), facturer l'abonnement des boutiques, répondre aux demandes de contact, sécuriser le service.</p>
-      <h2>Destinataires et sous-traitants</h2>
-      <ul>
-        <li>Hébergement de l'application et des documents : {v(COMPANY_PENDING.host, "hébergeur et localisation des serveurs")}</li>
-        <li>Envoi des e-mails : Resend (via la plateforme Emergent).</li>
-        <li>SMS (si activé par PrintDrop) : Twilio — <em>non activé à ce jour</em>.</li>
-        <li>Paiement des abonnements (si activé) : Mollie — <em>non activé à ce jour</em>.</li>
-      </ul>
-      <p><Todo>vérifier les transferts hors Union européenne et les garanties associées pour chaque prestataire</Todo></p>
       <h2>Durées de conservation</h2>
       <ul>
         <li><strong>Documents envoyés par les clients</strong> : {COMPANY_PENDING.documentRetention}. Ils ne peuvent pas être téléchargés par la boutique : ils sont uniquement transmis à l'imprimante, et seules les pages choisies par le client sont envoyées.</li>

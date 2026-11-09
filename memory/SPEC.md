@@ -102,3 +102,7 @@ backend/tests/test_stage1.py — auth, pricing, upload validation, token binding
 - lib/retention.py: on picked_up/cancelled → purge_order (files deleted, documents.status=purged, customer_name « Client anonymisé », phone/email/note cleared, order.purged_at). Hourly cron /api/cron/retention also purges orders older than 7 days and orphan uploads > 24 h. Amounts/status kept for reports.
 - crons.yml fixed: all entries use `cron:` (subscriptions-sweep previously used the invalid `schedule:` key).
 - Tests: backend/tests/test_retention_pages.py.
+
+## Contact inbox & legal cleanup
+- GET /api/admin/contact-messages (platform:read, newest first, IP hidden), PATCH /api/admin/contact-messages/{id} {handled} (platform:manage, audited platform.contact_handled). UI: SuperAdmin « Messages du site » (À traiter / Démos / Tous, reply by mailto, mark handled).
+- Legal pages: owner asked NOT to show legal form, capital, VAT, publication director, hosting provider, nor a recipients/subprocessors section — removed (not placeholders).
