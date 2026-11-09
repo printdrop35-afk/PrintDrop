@@ -1,7 +1,9 @@
+import { useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BRAND } from "@/lib/brand";
+import { printElement } from "@/lib/printElement";
 import { formatDateTime, formatEUR } from "@/i18n";
 import type { OrderPublicOut } from "@/lib/types";
 
@@ -10,8 +12,9 @@ import type { OrderPublicOut } from "@/lib/types";
  * types it into the « Marquer retirée » confirmation). Prints alone on the page (.pd-print-area, see index.css).
  */
 export function PickupTicket({ order }: { order: OrderPublicOut }) {
+  const ref = useRef<HTMLElement>(null);
   return (
-    <section className="pd-print-area rounded-2xl border bg-white p-5 shadow-sm" data-testid="pickup-ticket">
+    <section ref={ref} className="pd-print-area rounded-2xl border bg-white p-5 shadow-sm" data-testid="pickup-ticket">
       <div className="flex items-center justify-between gap-3 border-b pb-4">
         <img src={BRAND.logo.light} alt="PrintDrop" width={180} height={60} className="h-10 w-auto" data-testid="pickup-ticket-logo" />
         <span className="text-right text-xs text-muted-foreground">Ticket de retrait</span>
@@ -30,7 +33,7 @@ export function PickupTicket({ order }: { order: OrderPublicOut }) {
         </div>
       </div>
       <div className="mt-4 flex justify-end print:hidden">
-        <Button variant="outline" size="sm" onClick={() => window.print()} data-testid="pickup-ticket-print"><Printer className="size-3.5" /> Imprimer le ticket</Button>
+        <Button variant="outline" size="sm" onClick={() => printElement(ref.current, { pageWidth: "12cm", title: `Ticket ${order.code}` })} data-testid="pickup-ticket-print"><Printer className="size-3.5" /> Imprimer le ticket</Button>
       </div>
     </section>
   );

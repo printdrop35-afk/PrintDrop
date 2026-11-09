@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PaymentBadge, StatusBadge } from "@/components/StatusBadge";
 import { AlertsBanner, NotificationsPanel, PrintJobsPanel } from "@/components/OrderExtras";
 import { OrderLineDetails } from "@/components/OrderPrintTools";
+import { PickupReceipt } from "@/components/PickupReceipt";
 import { PrintDirect } from "@/pages/dashboard/PrintQueue";
 import { PaperStockDialog, PaperStrip } from "@/components/PaperStock";
 import { useDashboard } from "@/hooks/useDashboard";
@@ -58,6 +59,7 @@ function OrderSheet({ order, onClose, verifiedCode, onVerified }: { order: Order
   };
   const [pickup, setPickup] = useState(false);
   const [pickupCode, setPickupCode] = useState("");
+  const [printReceipt, setPrintReceipt] = useState(false); // opens the print window once, right after pickup
   const live = useQuery({ queryKey: ["order", order?.id], queryFn: () => apiGet<OrderOut>(`/orders/${order?.id}`), enabled: !!order, initialData: order ?? undefined, refetchInterval: 5000 });
   const o = live.data ?? order;
 
@@ -67,6 +69,7 @@ function OrderSheet({ order, onClose, verifiedCode, onVerified }: { order: Order
       refresh(res);
       if (vars.confirm_code) onVerified(res.id, vars.confirm_code); // verified once for this transaction
       setPickup(false); setPickupCode("");
+      if (res.status === "picked_up") setPrintReceipt(true);
       toast.success(`Commande ${res.code} : ${tk("status", res.status)}`);
     },
     onError: (e) => toast.error(errorMessage(e)),
@@ -156,6 +159,13 @@ function OrderSheet({ order, onClose, verifiedCode, onVerified }: { order: Order
                   </div>
                   <p className="text-xs text-emerald-800">Les fichiers de la commande seront supprimés automatiquement après le retrait.</p>
                 </form>
+              )}
+
+              {o.status === "picked_up" && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold tracking-[0.15em] text-slate-500 uppercase">Reçu de retrait</p>
+                  <PickupReceipt order={o} shop={shop} autoPrint={printReceipt} onPrinted={() => setPrintReceipt(false)} />
+                </div>
               )}
 
               <div>

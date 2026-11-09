@@ -128,3 +128,8 @@ backend/tests/test_stage1.py — auth, pricing, upload validation, token binding
 - Order sheet: « Étape 1 — Statut de la commande » then « Étape 2 — Mode de paiement » (Espèce / Carte), payment disabled while status is pending.
 - Orders page « Code client » scan box → GET /api/shops/{shop_id}/orders/by-code/{code} (tenant-scoped, in-progress order first). The scanned/confirmed code is kept for that order in page state (one transaction); pickup reuses it instead of prompting again; next scan replaces it. Backend still requires confirm_code for picked_up.
 - QR poster (Boutique & QR code) shows the official logo above the QR; pickup ticket already had it.
+
+## Pickup receipt
+- components/PickupReceipt.tsx shown in the order sheet once status = picked_up: logo, shop name/address, code, pickup date, lines, HT/TVA/TTC, payment method (Espèce/Carte), paid date. Print window opens once automatically right after pickup (user confirms), plus « Imprimer le reçu » button.
+- lib/printElement.ts prints a single element in a clean hidden iframe (app styles copied, 72 mm for the receipt, 12 cm for the pickup ticket) — used by receipt and pickup ticket.
+- i18n: method.cash « Espèce », method.card_terminal « Carte ».

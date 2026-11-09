@@ -205,5 +205,6 @@ html.brand-v2 :is(h1, h2, h3) { letter-spacing: -0.02em; }
     body * { visibility: hidden !important; }
     .pd-print-area, .pd-print-area * { visibility: visible !important; }
     .pd-print-area { position: absolute; inset: 0 auto auto 0; width: 100%; max-width: 14cm; border: 1px solid #CBD5E1 !important; box-shadow: none !important; }
+    .pd-print-area.pd-receipt { max-width: 7.2cm; border: 0 !important; } /* 80 mm thermal roll or top of an A4 */
     @page { margin: 1.2cm; }
 }
