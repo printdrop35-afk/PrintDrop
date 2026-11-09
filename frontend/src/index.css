@@ -7,7 +7,8 @@
 
 @custom-variant dark (&:is(.dark *));
 
-@theme inline {
+/* Brand tokens are real CSS variables (not inlined) so the brand-v2 preview can override them in one place. */
+@theme {
     --font-heading: 'Outfit Variable', sans-serif;
     --font-sans: 'DM Sans Variable', sans-serif;
     --font-mono: 'JetBrains Mono Variable', monospace;
@@ -15,6 +16,9 @@
     --color-ink-2: #1C2541;
     --color-azure: #2563EB;
     --color-teal-pd: #0D9488;
+}
+
+@theme inline {
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -165,4 +169,33 @@
   body * { visibility: hidden; }
   .print-area, .print-area * { visibility: visible; }
   .print-area { position: absolute; inset: 0; margin: 0; box-shadow: none !important; border: none !important; }
+}
+
+/* ---------- PrintDrop brand v2 (official logo palette) — applied on <html class="brand-v2"> ---------- */
+html.brand-v2 {
+    --color-ink: #09265C;
+    --color-ink-2: #071A3D;
+    --color-azure: #0868EF;
+    --color-teal-pd: #0E7490;
+    --color-cyan-pd: #08BBD0;
+    --background: #F4F7FC;
+    --foreground: #09265C;
+    --card-foreground: #09265C;
+    --popover-foreground: #09265C;
+    --primary: #0868EF;
+    --secondary-foreground: #09265C;
+    --muted-foreground: #475569;
+    --accent: #EAF2FE;
+    --accent-foreground: #0756C5;
+    --ring: #0868EF;
+    --chart-1: #0868EF;
+    --chart-2: #08BBD0;
+    --chart-5: #09265C;
+    --sidebar: #09265C;
+    --sidebar-primary: #0868EF;
+    --sidebar-accent: #0B3275;
+}
+html.brand-v2 :is(h1, h2, h3) { letter-spacing: -0.02em; }
+@media (prefers-reduced-motion: reduce) {
+    html.brand-v2 *, html.brand-v2 *::before, html.brand-v2 *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }

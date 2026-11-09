@@ -190,3 +190,8 @@ export interface BillingOverviewOut {
   invoices: InvoiceOut[]; usage_shops: number; usage_staff: number;
 }
 export interface AdminSubscriptionIn { plan_code?: string; period?: BillingPeriod; status?: "trialing" | "active" | "canceled"; period_end?: string }
+
+// ---------- marketing site ----------
+export interface PublicPlanOut { code: string; name: string; description: string; features: string[]; monthly_ht_cents: number; yearly_ht_cents: number | null }
+export interface ContactIn { kind: "contact" | "demo"; name: string; business: string; email: string; subject: string; message: string; website: string }
+export interface ContactOut { ok: boolean; delivered: boolean }

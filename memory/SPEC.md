@@ -89,3 +89,9 @@ backend/tests/test_stage1.py — auth, pricing, upload validation, token binding
 - AgentOut.update_available / latest_version: active agent with readable version older than latest → notice + badge on Imprimantes page.
 - GitHub workflow signs PrintDrop.exe + installer with signtool when repo secrets WINDOWS_CERT_PFX_BASE64 / WINDOWS_CERT_PASSWORD exist; otherwise unsigned build + warning. Publishes Release agent-v<version> with stable PrintDrop-Setup.exe.
 - Tests: backend/tests/test_agent_release.py.
+
+## Brand v2 (official logo) — PREVIEW ONLY, awaiting owner approval
+- Assets: brand/build_brand.py → frontend/public/brand/ (SVG + PNG: light, dark, mono, icon, app icons, favicons in brand/favicon/, OG image). Source: brand/source/logo-original.webp (already transparent).
+- Config: src/lib/brand.ts (BRAND, COMPANY — address « OREGRES » to verify, SIREN 800646697; COMPANY_PENDING = missing legal info, rendered « À compléter »).
+- Theme: brand tokens are non-inline @theme vars; html.brand-v2 overrides them (index.css). /apercu/* routes (BrandPreview) render real pages with v2: /apercu, /apercu/connexion, /apercu/dashboard, /apercu/s/:slug, /apercu/contact, /apercu/{mentions-legales|confidentialite|cgu|cookies}. Live routes unchanged.
+- New API: GET /api/public/plans, POST /api/public/contact (stores db.contact_messages, emails CONTACT_EMAIL=contact@printdrop.fr, honeypot + 5/h/IP).

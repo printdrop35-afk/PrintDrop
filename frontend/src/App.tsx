@@ -17,6 +17,10 @@ import Reports from "@/pages/dashboard/Reports";
 import Billing from "@/pages/dashboard/Billing";
 import PrintQueue, { Onboarding } from "@/pages/dashboard/PrintQueue";
 import InvoicePage from "@/pages/dashboard/Invoice";
+import { BrandPreview } from "@/components/brand/BrandPreview";
+import LandingV2 from "@/pages/site/LandingV2";
+import Contact from "@/pages/site/Contact";
+import LegalPage from "@/pages/site/Legal";
 
 // One <Route> per page in src/pages; BrowserRouter already wraps this in main.tsx.
 export default function App() {
@@ -43,6 +47,17 @@ export default function App() {
           <Route path="imprimantes" element={<Devices />} />
           <Route path="equipe" element={<Team />} />
           <Route path="journal" element={<Audit />} />
+        </Route>
+        {/* Brand v2 preview (Stage 3) — real pages rendered with the official identity, live routes untouched */}
+        <Route path="/apercu" element={<BrandPreview />}>
+          <Route index element={<LandingV2 />} />
+          <Route path="connexion" element={<Login />} />
+          <Route path="contact" element={<Contact />} />
+          <Route path="s/:slug" element={<CustomerPortal />} />
+          <Route path="dashboard" element={<DashboardLayout />}>
+            <Route index element={<Orders />} />
+          </Route>
+          <Route path=":doc" element={<LegalPage />} />
         </Route>
         <Route path="*" element={<Landing />} />
       </Routes>

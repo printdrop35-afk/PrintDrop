@@ -225,7 +225,7 @@ export default function CustomerPortal() {
               className="group flex w-full flex-col items-center rounded-2xl border-2 border-dashed border-slate-300 bg-white px-6 py-8 text-center shadow-sm transition-[border-color,box-shadow] hover:border-azure hover:shadow-md">
               {uploading > 0 ? <Loader2 className="size-9 animate-spin text-azure" /> : <UploadCloud className="size-9 text-azure transition-transform group-hover:-translate-y-0.5" />}
               <span className="mt-3 font-heading text-lg font-semibold text-ink">{uploading > 0 ? "Envoi en cours…" : "Ajouter des documents"}</span>
-              <span className="mt-1 text-sm text-muted-foreground">PDF, JPG ou PNG · 25 Mo max · fichiers privés</span>
+              <span className="mt-1 text-sm text-muted-foreground">PDF, Word, JPG ou PNG · 25 Mo max · fichiers privés</span>
             </button>
             <input ref={fileInput} type="file" multiple accept="application/pdf,image/png,image/jpeg,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="hidden" onChange={onFiles} data-testid="upload-file-input" />
 

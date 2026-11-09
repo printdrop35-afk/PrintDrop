@@ -854,3 +854,28 @@ class AdminSubscriptionIn(BaseModel):
     period: BillingPeriod | None = None
     status: Literal["trialing", "active", "canceled"] | None = None
     period_end: datetime | None = None
+
+
+# ---------- marketing site ----------
+class PublicPlanOut(BaseModel):
+    code: str
+    name: str
+    description: str
+    features: list[str]
+    monthly_ht_cents: int
+    yearly_ht_cents: int | None = None
+
+
+class ContactIn(BaseModel):
+    kind: Literal["contact", "demo"] = "contact"
+    name: str = Field(min_length=2, max_length=100)
+    business: str = Field(default="", max_length=120)
+    email: EmailStr
+    subject: str = Field(min_length=2, max_length=150)
+    message: str = Field(min_length=10, max_length=4000)
+    website: str = Field(default="", max_length=200)  # honeypot, must stay empty
+
+
+class ContactOut(BaseModel):
+    ok: bool
+    delivered: bool  # False = stored but not e-mailed (email not configured or failed)

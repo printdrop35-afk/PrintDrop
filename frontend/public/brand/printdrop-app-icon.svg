@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="PrintDrop"><rect width="64" height="64" rx="14" fill="#09265C"/><g transform="translate(5 3) scale(0.86)">
+  <defs>
+    <linearGradient id="pdFold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#08BBD0"/><stop offset="1" stop-color="#0868EF"/></linearGradient>
+    <linearGradient id="pdSwoosh" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#08BBD0"/></linearGradient>
+  </defs>
+  <rect x="3" y="17" width="4" height="4" rx="0.6" fill="#08BBD0"/>
+  <rect x="0.5" y="25" width="4.5" height="4.5" rx="0.6" fill="#0868EF"/>
+  <rect x="7.5" y="23" width="4.5" height="4.5" rx="0.6" fill="#1B8FEA"/>
+  <rect x="5" y="31" width="5.5" height="5.5" rx="0.7" fill="#0A7BE8"/>
+  <rect x="0" y="34" width="3.5" height="3.5" rx="0.5" fill="#FFFFFF"/>
+  <rect x="9" y="38" width="4.5" height="4.5" rx="0.6" fill="#08BBD0"/>
+  <rect x="6.5" y="45" width="3.5" height="3.5" rx="0.5" fill="#08BBD0"/>
+  <path d="M19 52 V14 a6 6 0 0 1 6 -6 H43 L54 19 V49" fill="none" stroke="#FFFFFF" stroke-width="3.6" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M43 8 V15 a4 4 0 0 0 4 4 H54 Z" fill="url(#pdFold)"/>
+  <g fill="none" stroke="#FFFFFF" stroke-width="1.8">
+    <rect x="24.4" y="23.4" width="7.2" height="7.2"/><rect x="38.4" y="23.4" width="7.2" height="7.2"/><rect x="24.4" y="37.4" width="7.2" height="7.2"/>
+  </g>
+  <g fill="#FFFFFF"><rect x="26.8" y="25.8" width="2.4" height="2.4"/><rect x="40.8" y="25.8" width="2.4" height="2.4"/><rect x="26.8" y="39.8" width="2.4" height="2.4"/>
+    <rect x="34" y="36" width="2.6" height="2.6"/><rect x="38.4" y="34.4" width="2.6" height="2.6"/><rect x="42.8" y="36" width="2.6" height="2.6"/><rect x="36.2" y="40.4" width="2.6" height="2.6"/><rect x="41" y="42" width="2.6" height="2.6"/></g>
+  <g fill="#0868EF"><rect x="33.6" y="23" width="2.8" height="3.6"/><rect x="33.6" y="28" width="2.8" height="3.6"/><rect x="24" y="33.4" width="4" height="2.6"/><rect x="33.6" y="44" width="2.8" height="2.6"/></g>
+  <rect x="30" y="33.6" width="2" height="2" fill="#08BBD0"/>
+  <path d="M8 60 C26 58 42 53 60 43 C44 50 28 55.5 8 60 Z" fill="url(#pdSwoosh)"/>
+</g></svg>

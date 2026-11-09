@@ -1,225 +1,333 @@
 {
-  "theme_strategy": {
-    "default_mode": "light",
-    "theme_support": "light_and_dark_toggle",
-    "archetype": "THE_PERFORMANCE_PRO_HYBRID_EDITORIAL",
-    "rationale": "For PrintDrop (print shop SaaS in France), a crisp, modern editorial aesthetic with warm paper stone neutrals (#F8F9FA, #F1F3F5), deep indigo ink anchor (#0B132B, #1C2541), electric cyan/azure accents (#2563EB / #0284C7), and vivid emerald status indicators (#059669) creates trust and tactile precision. The mobile customer portal is ultra-clean with tactile card surfaces, live Euro pricing indicators, and immediate drag-and-drop / camera upload flow."
+  "project_name": "PrintDrop",
+  "project_type": "hybrid_fullstack",
+  "locale": {
+    "language": "fr-FR",
+    "currency": "EUR (€)",
+    "number_format": "1 234,50 €",
+    "date_format": "DD/MM/YYYY"
+  },
+  "brand_identity": {
+    "name": "PrintDrop",
+    "core_concept": "Solution SaaS européenne de gestion de commandes d'impression et portail client QR Code sans contact pour imprimeries, reprographies, cybercafés et centres de services documentaires.",
+    "values": ["Innovation", "Simplicité", "Rapidité", "Fiabilité", "Impression Professionnelle", "Souveraineté & RGPD Européen"],
+    "voice_tone": "Européen mature, professionnel, précis, rassurant, orienté efficacité métier et clarté.",
+    "forbidden_patterns": [
+      "No generic AI purple/violet gradients (#7351B7 banned)",
+      "No invented client testimonials or fake metric statistics",
+      "No full-screen heavy dark blankets or muddy glassmorphism",
+      "No placeholder URLs or broken images",
+      "No non-semantic HTML selects or unlabelled form inputs"
+    ]
+  },
+  "logo_guidelines": {
+    "concept": "PrintDrop wordmark + document sheet with folded corner + 3-point QR finder matrix + subtle downward print drop/arrow accent.",
+    "svg_construction": {
+      "mark_geometry": "Document rectangle (viewBox 0 0 48 48) with top-right 45-degree fold cutout (path: M12 6 H30 L40 16 V42 H12 Z). Inside the document: upper-left QR finder square (8x8 with 4x4 inner dot), upper-right mini QR node (4x4), and bottom-center dynamic droplet/arrow in vibrant Cyan (#08BBD0) dropping onto an output tray line in Primary Blue (#0868EF).",
+      "wordmark": "Text 'Print' in bold Navy (#09265C) + 'Drop' in vibrant Primary Blue (#0868EF) with a subtle Cyan dot above the 'i' or on the 'o' accent.",
+      "variants": {
+        "horizontal_light": "Navy text + Blue/Cyan icon on Light/White background",
+        "horizontal_dark": "White/Cyan text + Light Blue/Cyan icon on Dark Navy background (#071A3D)",
+        "compact_icon": "Document sheet badge with QR dots + drop motif in 40x40 or 32x32 container",
+        "favicon_app_icon": "32x32 rounded-lg (radius 7px) background #09265C with #08BBD0 folded document + #0868EF drop",
+        "monochrome": "Pure Navy (#09265C) on light or Pure White (#FFFFFF) on dark"
+      },
+      "decorative_qr_rule": "The QR aesthetic is purely geometric and motif-driven (finder eyes and modular dots). It MUST NOT look like an accidental fake scannable QR code on the logo mark."
+    }
   },
   "typography": {
-    "font_family_heading": "Outfit Variable, sans-serif",
-    "font_family_body": "DM Sans Variable, sans-serif",
-    "font_family_mono": "JetBrains Mono Variable, monospace",
+    "pairing_strategy": "The Soft Utility & European Modernism (Outfit for crisp architectural headings + DM Sans for pristine legibility + JetBrains Mono for order numbers & pricing math)",
+    "font_imports": [
+      "@import \"@fontsource-variable/outfit\";",
+      "@import \"@fontsource-variable/dm-sans\";",
+      "@import \"@fontsource-variable/jetbrains-mono\";"
+    ],
+    "css_font_variables": {
+      "--font-heading": "'Outfit Variable', sans-serif",
+      "--font-sans": "'DM Sans Variable', sans-serif",
+      "--font-mono": "'JetBrains Mono Variable', monospace"
+    },
     "scale_px": {
       "display": 56,
-      "h1": 42,
+      "h1": 44,
       "h2": 32,
       "h3": 22,
+      "h4": 18,
       "body": 16,
       "caption": 14
     },
-    "letter_spacing": {
-      "display": "-0.03em",
-      "h1": "-0.025em",
-      "h2": "-0.02em",
-      "h3": "-0.015em",
-      "body": "0em",
-      "caption": "0.01em",
-      "overline": "0.15em"
-    },
-    "font_weights": {
-      "display": "700",
-      "h1": "700",
-      "h2": "650",
-      "h3": "600",
-      "body": "400",
-      "body_medium": "500",
-      "body_bold": "600"
+    "tracking_rules": {
+      "headings": "tracking-tight (-0.02em)",
+      "overlines_badges": "tracking-[0.15em] uppercase text-xs font-semibold",
+      "body": "tracking-normal leading-relaxed",
+      "mono_data": "tracking-tight font-mono text-sm"
     }
   },
   "colors": {
+    "palette_tokens": {
+      "navy_deep": "#09265C",
+      "primary_blue": "#0868EF",
+      "cyan_accent": "#08BBD0",
+      "white_pure": "#FFFFFF",
+      "light_bg": "#F4F7FC",
+      "dark_bg": "#071A3D",
+      "slate_border": "#E2E8F0",
+      "slate_muted": "#64748B",
+      "slate_dark_border": "#1E293B"
+    },
     "surfaces": [
       {
-        "name": "page",
+        "name": "page_light",
         "kind": "solid",
-        "bg": "#F8FAFC",
-        "on_bg": "#0F172A",
+        "bg": "#F4F7FC",
+        "on_bg": "#09265C",
         "on_bg_muted": "#475569",
         "roles": {
-          "link": "#2563EB",
+          "link": "#0868EF",
           "error": "#DC2626",
-          "success": "#059669",
-          "warning": "#D97706",
-          "border": "#E2E8F0"
+          "success": "#16A34A",
+          "warning": "#D97706"
         }
       },
       {
-        "name": "panel",
+        "name": "panel_white",
         "kind": "solid",
         "bg": "#FFFFFF",
-        "on_bg": "#0F172A",
+        "on_bg": "#09265C",
         "on_bg_muted": "#64748B",
         "roles": {
-          "link": "#2563EB",
+          "link": "#0868EF",
           "error": "#DC2626",
-          "success": "#059669",
-          "warning": "#D97706",
-          "border": "#E2E8F0"
+          "success": "#16A34A",
+          "warning": "#D97706"
         }
       },
       {
-        "name": "card_subtle",
+        "name": "page_dark_hero",
         "kind": "solid",
-        "bg": "#F1F5F9",
-        "on_bg": "#0F172A",
-        "on_bg_muted": "#475569",
-        "roles": {
-          "link": "#2563EB",
-          "error": "#DC2626",
-          "success": "#059669",
-          "warning": "#D97706",
-          "border": "#CBD5E1"
-        }
-      },
-      {
-        "name": "inverse",
-        "kind": "solid",
-        "bg": "#0F172A",
-        "on_bg": "#F8FAFC",
-        "on_bg_muted": "#94A3B8",
-        "roles": {
-          "link": "#60A5FA",
-          "error": "#F87171",
-          "success": "#34D399",
-          "warning": "#FBBF24",
-          "border": "#334155"
-        }
-      },
-      {
-        "name": "customer_portal_hero",
-        "kind": "solid",
-        "bg": "#0B132B",
-        "on_bg": "#F8FAFC",
+        "bg": "#071A3D",
+        "on_bg": "#FFFFFF",
         "on_bg_muted": "#94A3B8",
         "roles": {
           "link": "#38BDF8",
           "error": "#F87171",
-          "success": "#34D399",
-          "warning": "#FBBF24",
-          "border": "#1E293B"
+          "success": "#4ADE80",
+          "warning": "#FBBF24"
         }
       },
       {
-        "name": "badge_pending",
+        "name": "navy_surface",
         "kind": "solid",
-        "bg": "#FEF3C7",
-        "on_bg": "#92400E",
-        "on_bg_muted": "#78350F"
+        "bg": "#09265C",
+        "on_bg": "#FFFFFF",
+        "on_bg_muted": "#CBD5E1",
+        "roles": {
+          "link": "#08BBD0",
+          "error": "#F87171",
+          "success": "#4ADE80",
+          "warning": "#FDE047"
+        }
       },
       {
-        "name": "badge_printing",
+        "name": "customer_portal_header",
         "kind": "solid",
-        "bg": "#DBEAFE",
-        "on_bg": "#1E40AF",
-        "on_bg_muted": "#1E3A8A"
+        "bg": "#09265C",
+        "on_bg": "#FFFFFF",
+        "on_bg_muted": "#BAE6FD"
       },
       {
-        "name": "badge_ready",
+        "name": "badge_cyan_subtle",
         "kind": "solid",
-        "bg": "#D1FAE5",
-        "on_bg": "#065F46",
-        "on_bg_muted": "#047857"
+        "bg": "#E0F7FA",
+        "on_bg": "#0E7490",
+        "on_bg_muted": "#155E75"
       },
       {
-        "name": "badge_picked_up",
+        "name": "badge_blue_subtle",
         "kind": "solid",
-        "bg": "#E2E8F0",
-        "on_bg": "#334155",
-        "on_bg_muted": "#475569"
+        "bg": "#EFF6FF",
+        "on_bg": "#1D4ED8",
+        "on_bg_muted": "#1E40AF"
       },
       {
-        "name": "badge_cancelled",
+        "name": "badge_success_subtle",
         "kind": "solid",
-        "bg": "#FEE2E2",
-        "on_bg": "#991B1B",
-        "on_bg_muted": "#7F1D1D"
+        "bg": "#F0FDF4",
+        "on_bg": "#15803D",
+        "on_bg_muted": "#166534"
+      },
+      {
+        "name": "badge_warning_subtle",
+        "kind": "solid",
+        "bg": "#FFFBEB",
+        "on_bg": "#B45309",
+        "on_bg_muted": "#92400E"
+      },
+      {
+        "name": "hero_interactive_card",
+        "kind": "glass",
+        "contrast_against": "#071A3D",
+        "guarantee": "backdrop-blur-xl bg-white/95 border border-white/20 shadow-2xl",
+        "on_bg": "#09265C",
+        "on_bg_muted": "#64748B"
       }
     ],
-    "accent": "#2563EB",
+    "accent": "#0868EF",
     "on_accent": "#FFFFFF",
-    "accent_hover": "#1D4ED8",
-    "accent_secondary": "#0D9488",
-    "on_accent_secondary": "#FFFFFF"
+    "accent_secondary": "#08BBD0",
+    "on_accent_secondary": "#042F2E"
   },
   "entry_surfaces": {
-    "/": "editorial split hero — value proposition + CTA left with shop preview interactive calculator, live QR portal simulation card right",
-    "/login": "branded split auth — value positioning panel with cybercafé illustration metrics left, login form right",
-    "/register": "branded registration flow — organization + cybercafé setup wizard panel left, credentials form right",
-    "/s/:shopSlug": "mobile-first customer upload kiosk — boutique banner header top, document dropzone center, real-time live quotation footer with instant order button",
-    "/suivi/:orderCode": "live status tracker — visual step progression timeline, order summary, counter pickup QR and payment state banner",
-    "/dashboard": "operational mission control — shop metrics bar, instant order triage Kanban/Table, printer quick-toggles and QR poster generator modal",
-    "/superadmin": "platform management center — multi-tenant organization directory, global revenue stats, subscription tiers and shop suspension toggles"
+    "/": "split hero — brand headline + CTA + key trust metrics left, interactive live QR & instant price calculator simulation card right on subtle deep navy grid canvas",
+    "/login": "branded split login — European printing SaaS positioning panel left with security & RGPD guarantees, clean white auth card right",
+    "/register": "branded split register — onboarding benefit milestones left, multi-step shop registration card right",
+    "/kiosk": "mobile-first customer QR upload portal — shop identity header top, streamlined file drop zone + print options (format, couleur, copies) + real-time price bar bottom",
+    "/track": "customer order tracking page — order timeline progress bar top, shop contact and pickup PIN badge center",
+    "/app/orders": "shop command-center dashboard — status KPI metric cards top, high-density real-time orders data table with instant print & status triggers center"
   },
-  "layout_and_grids": {
-    "mobile_first_rules": "Touch targets minimum 48px, sticky bottom action bar on mobile customer portal with total in EUR (€), responsive collapse of kanban to tabs or single column on < 768px viewports.",
-    "dashboard_grid": "Sidebar 260px fixed on desktop + top sticky header + full height scrollable main area. 12-column bento widgets for KPI counters (col-span-3), active orders feed (col-span-8), printer status & quick actions (col-span-4).",
-    "customer_portal_layout": "Max-width 540px centered mobile container with tactile card elevation (shadow-sm, border border-slate-200), sticky floating bottom bar for order validation."
-  },
-  "visual_enhancers": {
-    "paper_texture": "Subtle dot-grid or millimeter graph paper pattern for print configuration preview sections.",
-    "qr_poster_generator": "Real printable SVG QR code with customizable cybercafé title, instructions ('Scannez, Déposez vos fichiers, Récupérez au comptoir') with print-friendly CSS @media print styling.",
-    "status_pills": "High-contrast status badges in French: 'En attente' (Amber), 'En impression' (Blue pulsant), 'Prête' (Green), 'Retirée' (Slate), 'Annulée' (Rose)."
-  },
-  "media": {
-    "image_urls": {
-      "customer_scanning_qr": "https://images.unsplash.com/photo-1595079676339-1534801ad6cf?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzV8MHwxfHNlYXJjaHwxfHxwZXJzb24lMjBzY2FubmluZyUyMHFyJTIwY29kZSUyMHBob25lfGVufDB8fHx8MTc5Mzk5MjczMHww&ixlib=rb-4.1.0&q=85",
-      "mobile_payment_counter": "https://images.unsplash.com/photo-1571867424488-4565932edb41?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzV8MHwxfHNlYXJjaHwzfHxwZXJzb24lMjBzY2FubmluZyUyMHFyJTIwY29kZSUyMHBob25lfGVufDB8fHx8MTc5Mzk5MjczMHww&ixlib=rb-4.1.0&q=85",
-      "shop_counter_atmosphere": "https://images.unsplash.com/photo-1753351050724-511764d227e3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDJ8MHwxfHNlYXJjaHwzfHxjb2ZmZWUlMjBzaG9wJTIwY291bnRlciUyMHBheW1lbnR8ZW58MHx8fHwxNzkzOTkyNzM2fDA&ixlib=rb-4.1.0&q=85"
+  "image_urls": [
+    {
+      "category": "hero_and_features",
+      "url": "https://images.unsplash.com/photo-1600147131759-880e94a6185f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzZ8MHwxfHNlYXJjaHwyfHxwZXJzb24lMjBzY2FubmluZyUyMHFyJTIwY29kZSUyMHBob25lfGVufDB8fHx8MTc5NDIzNzU3MHww&ixlib=rb-4.1.0&q=85",
+      "description": "Customer in print shop scanning QR code on desk with mobile phone",
+      "placement": "Homepage 'How It Works' Section & QR Upload demonstration visual"
+    },
+    {
+      "category": "printing_hardware_technology",
+      "url": "https://images.unsplash.com/photo-1503694978374-8a2fa686963a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1OTN8MHwxfHNlYXJjaHwxfHxwcmludCUyMHNob3AlMjBtb2Rlcm4lMjBwcmludGluZyUyMG1hY2hpbmV8ZW58MHx8fHwxNzk0MjM3NTcwfDA&ixlib=rb-4.1.0&q=85",
+      "description": "High-speed modern digital printing and reprography machine in action",
+      "placement": "Homepage Benefits section for shop owners & Equipment integration card"
+    },
+    {
+      "category": "customer_experience",
+      "url": "https://images.unsplash.com/photo-1571867424488-4565932edb41?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzZ8MHwxfHNlYXJjaHwzfHxwZXJzb24lMjBzY2FubmluZyUyMHFyJTIwY29kZSUyMHBob25lfGVufDB8fHx8MTc5NDIzNzU3MHww&ixlib=rb-4.1.0&q=85",
+      "description": "Mobile contactless document transfer between smartphone and counter",
+      "placement": "Homepage 3-step workflow step 1 (Sans application, 100% web)"
+    }
+  ],
+  "layouts_and_grids": {
+    "homepage_structure": [
+      {
+        "section": "Navigation Header",
+        "type": "Crystal Glass Sticky Nav",
+        "description": "Left: PrintDrop SVG logo. Center: Links (Fonctionnalités, Comment ça marche, Démo QR, Tarifs, FAQ). Right: Secondary CTA 'Se connecter' + Primary CTA 'Essai gratuit 14 jours' (Button Primary Blue) with data-testid='nav-cta-trial'."
+      },
+      {
+        "section": "Hero Section",
+        "type": "Bento Asymmetric Split",
+        "content": "Headline: « Votre imprimerie. Plus intelligente. Plus rapide. Digitale. » Subtitle: « Permettez à vos clients d'envoyer leurs documents directement depuis leur smartphone. Simplifiez les commandes d'impression, gagnez du temps au comptoir et modernisez votre activité. » CTAs: « Essai gratuit » (data-testid='hero-cta-trial') + « Réserver une démo » (data-testid='hero-cta-demo'). Right side: Interactive Mockup of PrintDrop QR scan & instant price quote computation."
+      },
+      {
+        "section": "3-Step Workflow for Customers",
+        "type": "Trio Stepper Bento",
+        "steps": [
+          "1. Le client scanne le QR code en boutique (aucun compte ni appli requise)",
+          "2. Téléversement de PDF, Word, Images & calcul instantané du tarif selon vos règles",
+          "3. Réception automatique dans votre file d'impression & notification au client"
+        ]
+      },
+      {
+        "section": "Main Features & Benefits for Print Shops",
+        "type": "Bento Grid Mode A (Tetris Grid)",
+        "cards": [
+          "File d'attente intelligente en temps réel",
+          "Tarification sur-mesure (N&B, Couleur, A4, A3, Recto-Verso, Reliure)",
+          "Génération de QR codes personnalisés par comptoir ou boutique",
+          "Statistiques de chiffre d'affaires et volumes de pages imprimées",
+          "Support multi-imprimantes et gestion d'équipe"
+        ]
+      },
+      {
+        "section": "Dashboard Interactive Preview",
+        "type": "MacBook / Browser framed SaaS preview with live tab switching",
+        "tabs": ["Commandes en direct", "File d'impression", "Configuration des tarifs", "QR Code comptoir"]
+      },
+      {
+        "section": "Pricing Plans",
+        "type": "3-Tier European SaaS Cards",
+        "plans": [
+          {"name": "Starter", "price": "19 € / mois", "desc": "Pour les cybercafés et petites boutiques.", "features": ["1 point de vente", "Jusqu'à 500 commandes / mois", "QR Code standard", "Support email 48h"]},
+          {"name": "Professionnel", "price": "39 € / mois", "popular": true, "desc": "Idéal pour les reprographies et imprimeurs de quartier.", "features": ["3 points de vente", "Commandes illimitées", "Tarifs personnalisés avancés", "File d'attente prioritaire", "Support prioritaire 24/7"]},
+          {"name": "Business", "price": "79 € / mois", "desc": "Pour les réseaux de reprographie et centres de documents.", "features": ["Multi-boutiques illimité", "Comptes équipiers multiples", "API & intégration ERP", "Gestionnaire de compte dédié", "SLA 99.9% garanti"]}
+        ],
+        "footer_note": "Essai gratuit de 14 jours sans engagement • Sans carte bancaire requise."
+      },
+      {
+        "section": "FAQ",
+        "type": "Accordion with clear typography and structured answers regarding RGPD, file formats, and hardware compatibility"
+      },
+      {
+        "section": "Contact & Demo Booking",
+        "type": "Two-column direct inquiry form with data-testid='contact-form'",
+        "fields": ["Nom complet", "Nom de l'établissement", "Email professionnel", "Sujet", "Message"]
+      },
+      {
+        "section": "Footer",
+        "type": "Deep Navy (#071A3D) Corporate European Footer",
+        "company_info": {
+          "legal_name": "PrintDrop SAS",
+          "address": "2 Rue du Couesnon, 35230 ORGÈRES, France",
+          "siren": "RCS / SIREN 800646697",
+          "links": ["Mentions légales", "Politique de confidentialité", "Conditions Générales d'Utilisation (CGU)", "Gestion des cookies", "Contact & Support"]
+        }
+      }
+    ],
+    "dashboard_shell_structure": {
+      "type": "High Density Grid (Mode B)",
+      "sidebar": "Fixed 260px Deep Navy (#09265C) with crisp active pill items and icons: Commandes, Démarrage, File d'impression, Rapports, Tarifs, Boutique & QR, Imprimantes, Équipe, Abonnement, Journal.",
+      "content_area": "Soft grey (#F4F7FC) background, white flat rounded-lg panels with 1px border (#E2E8F0), compact KPI summary cards, high-legibility data tables with status badges and quick action buttons."
+    },
+    "customer_mobile_portal_structure": {
+      "type": "Mobile-First Focused Single-Column Flow (<480px optimized)",
+      "header": "Clean shop identity with active status pill and location badge",
+      "drop_zone": "Large tactile dashed drag-and-drop / camera selector zone with animated upload icon",
+      "config_cards": "Segmented controls for Paper Format (A4/A3), Color (N&B / Couleur), Layout (Recto / Recto-Verso), Copies counter (+/- step buttons)",
+      "sticky_bottom_bar": "Fixed bottom bar showing calculated Total Price in EUR with large Primary Blue CTA 'Valider la commande' (data-testid='submit-order-button')"
     }
   },
-  "french_terminology": {
-    "order_statuses": {
-      "pending": "En attente",
-      "printing": "En impression",
-      "ready": "Prête",
-      "picked_up": "Retirée",
-      "cancelled": "Annulée"
+  "component_design_specs": {
+    "buttons": {
+      "primary": "bg-[#0868EF] hover:bg-[#0756C5] active:scale-[0.98] text-white font-medium rounded-lg px-5 py-2.5 transition-all shadow-sm focus:ring-2 focus:ring-[#0868EF]/40",
+      "secondary": "bg-white text-[#09265C] border border-[#CBD5E1] hover:bg-[#F8FAFC] active:scale-[0.98] font-medium rounded-lg px-5 py-2.5 transition-all",
+      "cyan_accent": "bg-[#08BBD0] hover:bg-[#069EAF] active:scale-[0.98] text-[#042F2E] font-semibold rounded-lg px-5 py-2.5 transition-all shadow-sm",
+      "destructive": "bg-red-600 hover:bg-red-700 active:scale-[0.98] text-white font-medium rounded-lg px-4 py-2 transition-all"
     },
-    "payment_statuses": {
-      "pending": "Non payé",
-      "paid_online": "Payé en ligne",
-      "paid_counter": "Payé au comptoir"
+    "cards": {
+      "marketing_card": "bg-white rounded-xl border border-[#E2E8F0] p-6 hover:border-[#0868EF]/30 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200",
+      "dashboard_kpi_card": "bg-white rounded-lg border border-[#E2E8F0] p-5 shadow-none hover:border-[#CBD5E1] transition-colors",
+      "status_badge": "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold"
     },
-    "printing_options": {
-      "bw": "Noir & Blanc (N&B)",
-      "color": "Couleur",
-      "duplex_simplex": "Recto seul",
-      "duplex_both": "Recto-Verso",
-      "copies": "Nombre d'exemplaires",
-      "page_ranges": "Pages spécifiques (ex: 1-5, 8)",
-      "paper_sizes": "Formats de papier (A4, A3, A5, Letter, Legal)"
-    },
-    "roles": {
-      "owner": "Propriétaire",
-      "manager": "Gérant",
-      "operator": "Opérateur / Employé",
-      "superadmin": "Super Administrateur"
+    "tables": {
+      "header": "bg-[#F8FAFC] text-[#475569] font-medium text-xs uppercase tracking-wider border-b border-[#E2E8F0] py-3 px-4",
+      "row": "border-b border-[#F1F5F9] hover:bg-[#F8FAFC] transition-colors text-sm text-[#09265C]"
     }
   },
-  "motion": {
-    "transitions": "transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease",
-    "spring_physics": "stiffness: 300, damping: 25",
-    "reduced_motion": "All animations must respect prefers-reduced-motion media queries"
+  "motion_and_interactions": {
+    "philosophy": "Subtle, purposeful and restrained European enterprise motion. No flashy bouncing or unnecessary 3D clutter.",
+    "hover_effects": "150ms ease-out transitions for scale (0.98 click, 1.01 hover on interactive cards), border color illumination.",
+    "page_transitions": "Subtle opacity and upward translation (y: 6px to 0, duration: 0.25s).",
+    "reduced_motion": "Wrap animations with prefers-reduced-motion media query checks."
   },
-  "accessibility": {
-    "contrast_standard": "WCAG AA (4.5:1 minimum for all text on background)",
-    "data_testids": "Mandatory on all buttons, forms, status pills, inputs, qr displays and modal triggers (e.g. data-testid='upload-dropzone', data-testid='order-status-badge', data-testid='mark-paid-button')"
+  "accessibility_and_wcag": {
+    "compliance_level": "WCAG AA",
+    "contrast_verification": {
+      "navy_text_on_white": "14.2:1 (Exceeds 4.5:1 requirement)",
+      "primary_blue_on_white": "4.6:1 (Normal text & buttons)",
+      "white_on_primary_blue": "4.6:1 (AA compliant CTA)",
+      "cyan_accent_usage": "Always used with Dark Teal (#042F2E) text for 7.8:1 contrast or as subtle background tint #E0F7FA with #0E7490 text.",
+      "slate_muted_text_on_light": "#475569 on #F4F7FC achieves 5.2:1 contrast."
+    },
+    "testing_attributes_contract": "All actionable controls (buttons, links, inputs, selects, tabs, forms, modals) MUST carry explicit kebab-case data-testid attributes."
   },
-  "instructions_to_main_agent": [
-    "Default language of the entire UI and notifications MUST be French with accurate print and shop terminology.",
-    "All monetary amounts MUST be formatted with European standard format: e.g. 0,15 € or 12,50 € (never $ or USD).",
-    "Implement the 3 distinct application experiences: 1) Public & Customer portal (/s/:shopSlug and /suivi/:orderCode), 2) Cybercafé owner/staff operational dashboard (/dashboard, /orders, /settings, /printers, /team, /qr-poster), 3) Super-Admin platform control (/superadmin).",
-    "Customer portal (/s/:shopSlug) must be mobile-first optimized with seamless document drag/drop or file selection, live server-based price calculator in EUR, instant order generation, and real-time tracking link.",
-    "Provide interactive printable QR poster generator with ready-to-print CSS styling for shop counters.",
-    "Include seeded mock shops (e.g. 'CyberCafé Bastille Paris', 'CopyPrint Lyon Bellecour', 'Atelier Numérique Nantes') with realistic past and pending orders, printer list, and customized pricing schemes."
-  ]
+  "instructions_to_main_agent": {
+    "summary": "Implement the complete visual design refresh of PrintDrop using the defined brand tokens, French copy, custom SVG logo, and pristine responsive UX.",
+    "action_checklist": [
+      "1. Update /app/frontend/src/index.css with font imports (@fontsource-variable/outfit, @fontsource-variable/dm-sans, @fontsource-variable/jetbrains-mono) and CSS color variables mapping to the European SaaS palette.",
+      "2. Create a high-quality SVG Logo component at /app/frontend/src/components/PrintDropLogo.tsx supporting horizontal, compact, dark, and icon-only modes with the document fold + QR motif + blue/cyan drop.",
+      "3. Redesign /app/frontend/src/pages/Landing.tsx with all required sections: Professional Navbar, Hero with exact French headlines, Bento 3-step workflow, features bento, dashboard live preview, 3-tier pricing (19€ / 39€ / 79€ with 14-day trial), FAQ, Contact demo form, and complete French legal footer with SIREN 800646697 and Orgères address.",
+      "4. Upgrade /app/frontend/src/pages/CustomerPortal.tsx into a frictionless mobile-first QR upload experience with real-time price calculator, file drag zone, and instant order tracking transition.",
+      "5. Polish the shop dashboard views (/app/frontend/src/pages/dashboard/*) with the 260px Navy sidebar, structured KPI cards, status badges with verified contrast, and clean order dispatch actions.",
+      "6. Add data-testid attributes to all interactive elements for test automation stability."
+    ]
+  }
 }

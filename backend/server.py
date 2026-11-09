@@ -19,7 +19,7 @@ from lib.storage import delete_file
 from lib.notify import check_agents_offline, process_notification_jobs
 from lib.printing import expire_stale_leases
 from migrations.runner import run_migrations
-from routers import admin, agent, auth, billing, printers, dashboard, devices, public, reports
+from routers import admin, agent, auth, billing, printers, dashboard, devices, public, reports, site
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +85,7 @@ api_router.include_router(agent.router)
 api_router.include_router(reports.router)
 api_router.include_router(billing.router)
 api_router.include_router(printers.router)
+api_router.include_router(site.router)
 
 # Include the router in the main app
 app.include_router(api_router)
