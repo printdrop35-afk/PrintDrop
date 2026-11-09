@@ -1,7 +1,7 @@
 ; PrintDrop pour Windows — script Inno Setup (compilé par .github/workflows/windows-agent.yml)
 #define AppVersion GetEnv("AGENT_VERSION")
 #if AppVersion == ""
-  #define AppVersion "0.2.0"
+  #define AppVersion "0.3.0"
 #endif
 
 [Setup]

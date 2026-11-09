@@ -25,7 +25,7 @@ jobs:
         run: pip install -r agent/requirements.txt pyinstaller==6.11.1
       - name: Compilation de PrintDrop.exe
         working-directory: agent
-        run: pyinstaller --onefile --noconsole --name PrintDrop --hidden-import win32timezone printdrop_agent.py
+        run: pyinstaller --onefile --noconsole --name PrintDrop --hidden-import win32timezone --hidden-import win32com.client --hidden-import pythoncom printdrop_agent.py
       - name: SumatraPDF (moteur d'impression PDF, GPLv3)
         working-directory: agent
         shell: pwsh
