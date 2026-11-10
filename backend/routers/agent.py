@@ -106,6 +106,23 @@ async def heartbeat(body: AgentHeartbeatIn, a: AgentPrincipal = Depends(get_agen
                              commands=[{"id": c["id"], "type": c["type"], "payload": c["payload"]} for c in cmds])
 
 
+@router.get("/installer")
+async def agent_installer(a: AgentPrincipal = Depends(get_agent)):
+    """Installer download for the paired agent itself (one-click update), authenticated by its API key."""
+    from fastapi.responses import Response
+    from lib.agent_release import get_release
+    from lib.storage import StorageError, read_file
+    rel = await get_release()
+    if not rel["file_key"]:
+        raise HTTPException(status_code=404, detail="Installateur pas encore publié")
+    try:
+        data = await read_file(rel["file_key"])
+    except (StorageError, OSError) as exc:
+        raise HTTPException(status_code=404, detail="Installateur introuvable") from exc
+    return Response(data, media_type="application/vnd.microsoft.portable-executable",
+                    headers={"Content-Disposition": f'attachment; filename="{rel["filename"]}"', "Cache-Control": "no-store"})
+
+
 @router.post("/commands/{command_id}/progress")
 async def command_progress(command_id: str, body: AgentCopyProgressIn, a: AgentPrincipal = Depends(get_agent)):
     """Live photocopy progress (pages scanned, pages printed per the Windows spooler). Also proves the PC is alive."""

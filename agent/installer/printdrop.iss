@@ -19,6 +19,8 @@ MinVersion=10.0
 PrivilegesRequired=admin
 UninstallDisplayName=PrintDrop pour Windows
 WizardStyle=modern
+CloseApplications=force
+RestartApplications=no
 
 [Languages]
 Name: "fr"; MessagesFile: "compiler:Languages\French.isl"
@@ -43,6 +45,8 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 
 [Run]
 Filename: "{app}\PrintDrop.exe"; Description: "Lancer PrintDrop et associer ce PC"; Flags: nowait postinstall skipifsilent
+; silent install = one-click update from the dashboard: restart the agent for the signed-in user
+Filename: "{app}\PrintDrop.exe"; Parameters: "--background"; Flags: nowait runasoriginaluser; Check: WizardSilent
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{localappdata}\PrintDrop\tmp"

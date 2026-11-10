@@ -619,7 +619,7 @@ class ScannerCaps(BaseModel):
 
 class AgentCommandOut(BaseModel):
     id: str
-    type: Literal["discover_usb", "discover_network", "discover_all", "install_printer", "add_network_printer", "test_connection", "test_page", "scan", "copy"]
+    type: Literal["discover_usb", "discover_network", "discover_all", "install_printer", "add_network_printer", "test_connection", "test_page", "scan", "copy", "self_update"]
     payload: dict[str, Any]
 
 

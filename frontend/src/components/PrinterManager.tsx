@@ -17,7 +17,7 @@ export const CONN_LABEL: Record<string, string> = {
 };
 
 /** Sends a command to the agent and polls its real result (never fabricated client-side). */
-function useAgentCommand(onDone: (c: CommandOut) => void) {
+export function useAgentCommand(onDone: (c: CommandOut) => void) {
   const [cmdId, setCmdId] = useState<string | null>(null);
   const q = useQuery({
     queryKey: ["agent-cmd", cmdId], enabled: !!cmdId, queryFn: () => apiGet<CommandOut>(`/agent-commands/${cmdId}`),

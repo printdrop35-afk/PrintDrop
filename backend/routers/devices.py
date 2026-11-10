@@ -15,7 +15,7 @@ from lib.notify import twilio_configured
 from lib.printing import create_reprint, is_online
 from lib.security import sha256
 from models.schemas import (
-    AgentOut, NotificationOut, NotificationStatusOut, PairingCodeOut, PrinterOut, PrinterUpdateIn, PrintJobOut, ReprintIn,
+    AgentOut, CommandOut, NotificationOut, NotificationStatusOut, PairingCodeOut, PrinterOut, PrinterUpdateIn, PrintJobOut, ReprintIn,
 )
 from routers.dashboard import get_order_or_404, get_shop_or_404
 
@@ -46,6 +46,37 @@ async def list_agents(shop_id: str, p: Principal = Depends(require_tenant("devic
     latest = (await get_release())["version"]
     return [AgentOut(**a, online=a["status"] == "active" and is_online(a.get("last_seen_at")), latest_version=latest,
                      update_available=a["status"] == "active" and is_outdated(a.get("version", ""), latest)) for a in agents]
+
+
+SELF_UPDATE_MIN = "0.4.0"  # first agent version that understands « self_update »
+
+
+@router.post("/agents/{agent_id}/update", response_model=CommandOut)
+async def update_agent(agent_id: str, p: Principal = Depends(require_tenant("devices:manage"))):
+    """« Mettre à jour en un clic »: the counter PC downloads the installer hosted on printdrop.fr, checks its SHA-256,
+    then runs it silently (Windows asks for administrator approval). Pairing and printers are kept."""
+    repo = tenant_repo(p)
+    agent = await repo.find_one("agents", {"id": agent_id, "status": "active"})
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent introuvable")
+    rel = await get_release()
+    if not rel["file_key"]:
+        raise HTTPException(status_code=409, detail="Aucun installateur n'est publié sur printdrop.fr pour le moment")
+    if not is_outdated(agent.get("version", ""), rel["version"]):
+        raise HTTPException(status_code=409, detail="Cet agent est déjà à jour")
+    if is_outdated(agent.get("version", ""), SELF_UPDATE_MIN):
+        raise HTTPException(status_code=409, detail=f"Cet agent (v{agent.get('version') or '?'}) est trop ancien pour la mise à jour automatique : installez une fois la nouvelle version à la main (bouton « Télécharger l'agent Windows »)")
+    if not is_online(agent.get("last_seen_at")):
+        raise HTTPException(status_code=409, detail="Le PC du comptoir est hors ligne : démarrez PrintDrop sur ce PC puis réessayez")
+    if await repo.count("agent_commands", {"agent_id": agent_id, "type": "self_update", "status": {"$in": ["queued", "sent"]}}):
+        raise HTTPException(status_code=409, detail="Une mise à jour est déjà en cours sur ce PC")
+    doc = {"id": str(uuid.uuid4()), "agent_id": agent_id, "shop_id": agent["shop_id"], "type": "self_update",
+           "payload": {"version": rel["version"], "sha256": rel["sha256"], "size_bytes": rel["size_bytes"]},
+           "status": "queued", "result": {}, "error": "", "created_at": now_utc(), "requested_by": p.user_id}
+    await repo.insert("agent_commands", doc)
+    await audit("agent.self_update", principal=p, resource_type="agent", resource_id=agent_id,
+                details={"from": agent.get("version", ""), "to": rel["version"]})
+    return doc
 
 
 @router.post("/agents/{agent_id}/revoke", response_model=AgentOut)

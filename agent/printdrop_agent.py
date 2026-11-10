@@ -15,6 +15,7 @@ Sécurité / confidentialité :
 
 import argparse
 import base64
+import hashlib
 import concurrent.futures
 import ipaddress
 import json
@@ -551,7 +552,7 @@ class Agent:
                                                     "installed": [p for p in self.backend.printers() if p["connection_type"] == "network"]},
                     "add_network_printer": self.backend.add_network_printer, "test_connection": self.backend.test_connection,
                     "test_page": self.backend.test_page, "scan": self.scan, "discover_all": self.discover_all,
-                    "install_printer": self.install_printer, "copy": self.copy}
+                    "install_printer": self.install_printer, "copy": self.copy, "self_update": self.self_update}
         log.info("Commande reçue : %s", cmd["type"])
         self.current_cmd = cmd["id"]
         try:
@@ -617,6 +618,29 @@ class Agent:
         if pl.get("device_id") and any(d["device_id"] == pl["device_id"] for d in usb_devices_without_driver()):
             raise PrintError("Windows n'a pas trouvé de pilote pour cet appareil USB. Installez le pilote officiel du fabricant puis relancez la recherche.")
         raise PrintError("Aucune nouvelle imprimante n'est apparue dans Windows. Débranchez/rebranchez le câble USB puis relancez la recherche.")
+
+    def self_update(self, pl: dict) -> dict:
+        """One-click update: download the installer from printdrop.fr, verify its SHA-256, run it silently.
+        Windows shows its administrator prompt; the installer closes this agent and restarts the new one."""
+        if sys.platform != "win32" or isinstance(self.backend, DryRunBackend):
+            raise RuntimeError("Mise à jour automatique disponible uniquement sur Windows")
+        TMP_DIR.mkdir(parents=True, exist_ok=True)
+        dest = TMP_DIR / f"PrintDrop-Setup-{pl['version']}.exe"
+        try:
+            self.api.download("/api/agent/installer", dest)
+        except requests.RequestException as exc:
+            raise RuntimeError(f"Téléchargement de la mise à jour impossible : {exc}") from exc
+        digest = hashlib.sha256(dest.read_bytes()).hexdigest()
+        if pl.get("sha256") and digest != pl["sha256"]:
+            dest.unlink(missing_ok=True)
+            raise RuntimeError("Fichier de mise à jour corrompu (empreinte SHA-256 différente) : réessayez")
+        import ctypes
+        params = f'/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /LOG="{TMP_DIR / "update.log"}"'
+        rc = ctypes.windll.shell32.ShellExecuteW(None, "runas", str(dest), params, None, 0)
+        if rc <= 32:
+            raise RuntimeError("Mise à jour annulée : l'autorisation administrateur de Windows a été refusée" if rc == 5
+                               else f"Windows n'a pas pu lancer l'installateur (code {rc})")
+        return {"installer_started": True, "version": pl["version"], "sha256": digest}
 
     def copy(self, pl: dict) -> dict:
         """Automatic photocopy: WIA scan of the original, then print of the copies through the Windows spooler.

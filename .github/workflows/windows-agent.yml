@@ -117,6 +117,8 @@ jobs:
         shell: pwsh
         run: |
           $app = Join-Path $env:ProgramFiles 'PrintDrop'
+          Get-Process PrintDrop -ErrorAction SilentlyContinue | Stop-Process -Force  # window opened after silent install
+          Start-Sleep 2
           Start-Process (Join-Path $app 'unins000.exe') -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait
           for ($i = 0; $i -lt 30 -and (Test-Path (Join-Path $app 'PrintDrop.exe')); $i++) { Start-Sleep 2 }
           if (Test-Path (Join-Path $app 'PrintDrop.exe')) { throw "PrintDrop.exe toujours présent après désinstallation" }

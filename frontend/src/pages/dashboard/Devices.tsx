@@ -1,15 +1,16 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowUpCircle, Download, KeyRound, Monitor, Printer, ShieldOff, Star, TriangleAlert } from "lucide-react";
+import { ArrowUpCircle, Download, KeyRound, Loader2, Monitor, Printer, ShieldOff, Star, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useDashboard } from "@/hooks/useDashboard";
 import { apiGet, apiPatch, apiPost, errorMessage } from "@/lib/api";
 import { formatDateTime } from "@/i18n";
 import { cn } from "@/lib/utils";
-import { PrinterManager } from "@/components/PrinterManager";
-import type { AgentDownloadOut, AgentOut, NotificationStatusOut, PairingCodeOut, PrinterOut, PrinterUpdateIn } from "@/lib/types";
+import { PrinterManager, useAgentCommand } from "@/components/PrinterManager";
+import { AgentSetupGuide } from "@/components/AgentSetupGuide";
+import type { AgentDownloadOut, AgentOut, CommandOut, NotificationStatusOut, PairingCodeOut, PrinterOut, PrinterUpdateIn } from "@/lib/types";
 
 export default function Devices() {
   const { shop, can } = useDashboard();
@@ -25,6 +26,17 @@ export default function Devices() {
   const code = useMutation({
     mutationFn: () => apiPost<PairingCodeOut>(`/shops/${shop.id}/agents/pairing-code`),
     onSuccess: setPairing,
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  const [updating, setUpdating] = useState<Record<string, string>>({}); // agent id -> target version
+  const lastUpd = useRef("");
+  const updCmd = useAgentCommand((c) => {
+    if (c.status === "done") toast.success("Installation lancée sur le PC du comptoir : acceptez la demande Windows si elle s'affiche. PrintDrop redémarre tout seul.", { duration: 9000 });
+    else { toast.error(c.error || "Le PC n'a pas répondu"); const id = lastUpd.current; setUpdating((u) => Object.fromEntries(Object.entries(u).filter(([k]) => k !== id))); }
+  });
+  const update = useMutation({
+    mutationFn: (a: AgentOut) => apiPost<CommandOut>(`/agents/${a.id}/update`),
+    onSuccess: (c, a) => { lastUpd.current = a.id; setUpdating((u) => ({ ...u, [a.id]: a.latest_version })); updCmd.start(c); },
     onError: (e) => toast.error(errorMessage(e)),
   });
   const revoke = useMutation({
@@ -64,7 +76,7 @@ export default function Devices() {
                 <p className="font-semibold">Nouvelle version de l'agent disponible : v{outdated[0].latest_version}</p>
                 <p className="mt-0.5 text-xs">
                   {outdated.map((a) => `${a.name} (v${a.version})`).join(", ")} {outdated.length > 1 ? "utilisent" : "utilise"} une version plus ancienne.
-                  Téléchargez l'installateur et lancez-le sur le PC du comptoir : l'appairage et les imprimantes sont conservés.
+                  Cliquez sur « Mettre à jour en un clic » à côté du poste (il doit être allumé) ou téléchargez l'installateur. L'appairage et les imprimantes sont conservés.
                 </p>
                 {release?.notes && <p className="mt-1 text-xs text-sky-800" data-testid="agent-update-notes">Nouveautés : {release.notes}</p>}
               </div>
@@ -96,6 +108,15 @@ export default function Devices() {
                       <span className={cn("size-1.5 rounded-full bg-current", a.online && "animate-pulse-soft")} />
                       {a.status === "revoked" ? "Révoqué" : a.online ? "En ligne" : "Hors ligne"}
                     </span>
+                    {updating[a.id] && a.version !== updating[a.id] && (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-sky-800" data-testid={`agent-updating-${a.id}`}><Loader2 className="size-3.5 animate-spin" /> Mise à jour vers v{updating[a.id]}…</span>
+                    )}
+                    {updating[a.id] && a.version === updating[a.id] && <span className="text-xs font-semibold text-emerald-700" data-testid={`agent-updated-${a.id}`}>À jour ✓</span>}
+                    {manage && a.update_available && a.online && release?.available && (release.size_bytes ?? 0) > 0 && !updating[a.id] && (
+                      <Button size="sm" onClick={() => update.mutate(a)} disabled={update.isPending} data-testid={`agent-update-${a.id}`}>
+                        <ArrowUpCircle className="size-3.5" /> Mettre à jour en un clic
+                      </Button>
+                    )}
                     {manage && a.status === "active" && (
                       <Button size="sm" variant="ghost" className="text-rose-700" onClick={() => revoke.mutate(a.id)} data-testid={`agent-revoke-${a.id}`}><ShieldOff className="size-3.5" /> Révoquer</Button>
                     )}
@@ -104,6 +125,8 @@ export default function Devices() {
               </ul>
             )}
           </section>
+
+          <AgentSetupGuide />
 
           <PrinterManager shopId={shop.id} agents={agents.data ?? []} printers={printerList} manage={manage} />
         </div>
@@ -118,9 +141,7 @@ export default function Devices() {
                 <div className="mt-4 rounded-xl bg-white/10 p-4 text-center">
                   <p className="font-mono text-3xl font-bold tracking-[0.2em]" data-testid="pairing-code">{pairing.code}</p>
                   <p className="mt-1 text-xs text-slate-300">Expire à {formatDateTime(pairing.expires_at)}</p>
-                  <p className="mt-3 rounded-lg bg-black/30 p-2 text-left font-mono text-[11px] break-all text-sky-200" data-testid="pairing-command">
-                    python printdrop_agent.py pair --server {window.location.origin} --code {pairing.code}
-                  </p>
+                  <p className="mt-3 text-left text-xs text-slate-300" data-testid="pairing-command">Sur le PC du comptoir, ouvrez PrintDrop et saisissez ce code.</p>
                 </div>
               ) : null}
               <Button className="mt-4 w-full" disabled={code.isPending} onClick={() => code.mutate()} data-testid="generate-pairing-code-button">

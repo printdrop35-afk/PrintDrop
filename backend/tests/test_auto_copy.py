@@ -157,3 +157,37 @@ def test_agent_installer_hosted_on_printdrop(client):
     assert admin.delete("/admin/agent-release/file").status_code == 200
     assert owner.get("/agent-download").json()["available"] is (bool(before.get("external_url")))
     assert owner.get("/agent-download/file").status_code == 404
+
+
+def test_one_click_agent_update(client):
+    import httpx
+    from tests.conftest import API_URL as BASE_URL
+    from tests.test_stage1 import login
+    admin = login("printdrop35@gmail.com", "Admin2026!")
+    owner, _ = fresh_owner()
+    info, agent, shop, printer = setup(owner, "PC maj")  # heartbeat reports v0.4.0
+    try:
+        # no hosted installer => refused
+        assert owner.post(f"/agents/{info['agent_id']}/update").status_code == 409
+        exe = b"MZ" + b"\0" * 100 + b"Inno Setup Setup Data (6.2.2)" + b"\0" * (1024 * 1024)
+        rel = admin.post("/admin/agent-release/upload", files={"file": ("PrintDrop-Setup-0.4.1.exe", exe)}).json()
+        assert rel["version"] == "0.4.1"
+        r = owner.post(f"/agents/{info['agent_id']}/update")
+        assert r.status_code == 200, r.text
+        assert r.json()["type"] == "self_update"
+        assert owner.post(f"/agents/{info['agent_id']}/update").status_code == 409  # already in progress
+        cmd = commands(agent, "self_update")[0]
+        assert cmd["payload"]["sha256"] == rel["sha256"] and cmd["payload"]["version"] == "0.4.1"
+        dl = agent.get("/agent/installer")
+        assert dl.status_code == 200 and dl.content == exe
+        assert httpx.get(f"{BASE_URL}/agent/installer").status_code == 401
+        agent.post(f"/agent/commands/{cmd['id']}/result", json={"ok": True, "result": {"installer_started": True}}).raise_for_status()
+        # once the new agent reports 0.4.1 it is up to date
+        agent.post("/agent/heartbeat", json={"version": "0.4.1", "printers": [], "scanners": []})
+        a = next(x for x in owner.get(f"/shops/{shop['id']}/agents").json() if x["id"] == info["agent_id"])
+        assert a["version"] == "0.4.1" and a["update_available"] is False
+        assert owner.post(f"/agents/{info['agent_id']}/update").status_code == 409
+    finally:
+        admin.delete("/admin/agent-release/file")
+        admin.put("/admin/agent-release", json={"url": "", "version": "0.2.0", "notes": ""})
+        owner.post(f"/agents/{info['agent_id']}/revoke")
