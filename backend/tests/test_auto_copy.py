@@ -132,3 +132,28 @@ def test_copy_live_progress(client):
     agent.post(f"/agent/commands/{cmd['id']}/result", json={"ok": True, "result": {"scanned_pages": 4, "copies_printed": 3, "spool_confirmed": True}})
     assert agent.post(f"/agent/commands/{cmd['id']}/progress", json={"phase": "printing"}).status_code == 404  # finished
     owner.post(f"/agents/{info['agent_id']}/revoke")
+
+
+def test_agent_installer_hosted_on_printdrop(client):
+    import httpx
+    from tests.conftest import API_URL as BASE_URL
+    from tests.test_stage1 import login
+    admin = login("printdrop35@gmail.com", "Admin2026!")
+    before = admin.get("/admin/agent-release").json()
+    fake_exe = b"MZ" + b"\0" * 100 + b"Inno Setup Setup Data (6.2.2)" + b"\0" * (1024 * 1024)
+    # not an exe / not the PrintDrop installer => refused, nothing published
+    assert admin.post("/admin/agent-release/upload", files={"file": ("x.exe", b"hello" * 300000)}).status_code == 422
+    assert admin.post("/admin/agent-release/upload", files={"file": ("PrintDrop-Setup-0.4.0.exe", b"MZ" + b"\0" * (1024 * 1024))}).status_code == 422
+    r = admin.post("/admin/agent-release/upload", files={"file": ("PrintDrop-Setup-0.4.0.exe", fake_exe)})
+    assert r.status_code == 200, r.text
+    rel = r.json()
+    assert rel["version"] == "0.4.0" and rel["url"] == "/api/agent-download/file" and len(rel["sha256"]) == 64
+    owner, _ = fresh_owner()
+    dl = owner.get("/agent-download").json()
+    assert dl["available"] and dl["url"] == "/api/agent-download/file" and dl["size_bytes"] == len(fake_exe)
+    f = owner.get("/agent-download/file")
+    assert f.status_code == 200 and f.content == fake_exe and "PrintDrop-Setup-0.4.0.exe" in f.headers["content-disposition"]
+    assert httpx.get(f"{BASE_URL}/agent-download/file").status_code == 401  # signed-in shops only
+    assert admin.delete("/admin/agent-release/file").status_code == 200
+    assert owner.get("/agent-download").json()["available"] is (bool(before.get("external_url")))
+    assert owner.get("/agent-download/file").status_code == 404

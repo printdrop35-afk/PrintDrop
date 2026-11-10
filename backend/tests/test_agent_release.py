@@ -28,7 +28,7 @@ def test_release_validation_permissions_and_update_flag():
         assert anon.get("/agent-download").status_code == 401
 
         dl = owner.get("/agent-download").json()
-        assert dl == {"available": True, "url": url, "version": "9.9.0", "notes": "Correctifs"}
+        assert dl == {"available": True, "url": url, "version": "9.9.0", "notes": "Correctifs", "sha256": "", "size_bytes": 0}
 
         shop = next(s for s in owner.get("/auth/me").json()["shops"] if s["slug"] == "cybercafe-bastille")
         code = owner.post(f"/shops/{shop['id']}/agents/pairing-code").json()["code"]

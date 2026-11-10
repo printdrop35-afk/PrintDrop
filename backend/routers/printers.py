@@ -293,4 +293,21 @@ async def onboarding_mark(step: str, done: bool = True, p: Principal = Depends(r
 @router.get("/agent-download", response_model=AgentDownloadOut)
 async def agent_download(_: Principal = Depends(require_tenant("devices:read"))):
     r = await get_release()
-    return AgentDownloadOut(available=bool(r["url"]), url=r["url"], version=r["version"], notes=r["notes"])
+    return AgentDownloadOut(available=bool(r["url"]), url=r["url"], version=r["version"], notes=r["notes"], sha256=r["sha256"], size_bytes=r["size_bytes"])
+
+
+@router.get("/agent-download/file")
+async def agent_download_file(_: Principal = Depends(require_tenant("devices:read"))):
+    """The Windows installer hosted on printdrop.fr (uploaded by the super-admin)."""
+    from fastapi.responses import Response
+    from lib.storage import StorageError, read_file
+    r = await get_release()
+    if not r["file_key"]:
+        raise HTTPException(status_code=404, detail="Installateur pas encore publié")
+    try:
+        data = await read_file(r["file_key"])
+    except (StorageError, OSError) as exc:
+        raise HTTPException(status_code=404, detail="Installateur introuvable sur le serveur — prévenez PrintDrop") from exc
+    return Response(data, media_type="application/vnd.microsoft.portable-executable", headers={
+        "Content-Disposition": f'attachment; filename="{r["filename"]}"', "X-Content-SHA256": r["sha256"],
+        "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})

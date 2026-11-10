@@ -48,7 +48,7 @@ export const apiDelete = <T>(path: string) => request<T>("DELETE", path);
 // Multipart upload (browser sets the boundary header itself).
 export async function apiUpload<T>(path: string, file: File): Promise<T> {
   const form = new FormData();
-  form.append("file", file);
+  form.append("file", file, file.name);
   const res = await fetch(`${BASE}${path}`, { method: "POST", body: form });
   if (!res.ok) {
     const errBody = await res.json().catch(() => null);

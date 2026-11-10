@@ -60,24 +60,100 @@ jobs:
       - name: Avertissement si non signé
         if: env.WINDOWS_CERT_PFX_BASE64 == ''
         run: echo "::warning::Installateur NON signé (secrets WINDOWS_CERT_PFX_BASE64 / WINDOWS_CERT_PASSWORD absents) - Windows SmartScreen affichera un avertissement."
+      - name: Empreinte SHA-256
+        shell: pwsh
+        run: Get-ChildItem agent/dist/PrintDrop-Setup-*.exe | ForEach-Object { (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower() + "  " + $_.Name } | Set-Content agent/dist/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
           name: PrintDrop-Setup
-          path: agent/dist/PrintDrop-Setup-*.exe
-      - name: Nom stable pour le lien de téléchargement
+          path: |
+            agent/dist/PrintDrop-Setup-*.exe
+            agent/dist/SHA256SUMS.txt
+
+  # Real install / self-test / uninstall on GitHub's Windows images (Server 2022 = Windows 10 21H2 base, Server 2025 = Windows 11 24H2 base).
+  # Desktop Windows 10/11 with real printers must still be checked on a shop PC.
+  test:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    runs-on: ${{ matrix.os }}
+    env:
+      PAIRING_SERVER: https://printdrop.fr
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: PrintDrop-Setup
+          path: dist
+      - name: Installation silencieuse (démarrage avec Windows coché)
         shell: pwsh
-        run: Copy-Item agent/dist/PrintDrop-Setup-*.exe agent/dist/PrintDrop-Setup.exe
+        run: |
+          $setup = Get-ChildItem dist -Filter PrintDrop-Setup-*.exe | Select-Object -First 1
+          $p = Start-Process $setup.FullName -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/TASKS=autostart',"/LOG=$pwd\install.log" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content install.log; throw "Installation échouée (code $($p.ExitCode))" }
+          $app = Join-Path $env:ProgramFiles 'PrintDrop'
+          foreach ($f in 'PrintDrop.exe','SumatraPDF.exe','unins000.exe') { if (-not (Test-Path (Join-Path $app $f))) { throw "Fichier manquant après installation : $f" } }
+          $run = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name PrintDrop -ErrorAction SilentlyContinue).PrintDrop
+          if (-not $run -or $run -notlike '*--background*') { throw "Démarrage automatique avec Windows non configuré" }
+          Write-Host "Démarrage auto : $run"
+      - name: Auto-test de l'agent installé (dépendances, spouleur, SumatraPDF, appairage avec printdrop.fr)
+        shell: pwsh
+        run: |
+          $exe = Join-Path $env:ProgramFiles 'PrintDrop\PrintDrop.exe'
+          $t = Start-Process $exe -ArgumentList '--self-test',"$pwd\selftest.json",$env:PAIRING_SERVER -Wait -PassThru
+          if (-not (Test-Path selftest.json)) { throw "L'agent n'a produit aucun rapport (plantage au démarrage ?)" }
+          Get-Content selftest.json
+          if ($t.ExitCode -ne 0) { throw "Auto-test en échec (code $($t.ExitCode))" }
+      - name: Démarrage en arrière-plan (10 s sans plantage)
+        shell: pwsh
+        run: |
+          $exe = Join-Path $env:ProgramFiles 'PrintDrop\PrintDrop.exe'
+          $p = Start-Process $exe -ArgumentList '--background' -PassThru
+          Start-Sleep 10
+          if ($p.HasExited) { Get-Content "$env:LOCALAPPDATA\PrintDrop\agent.log" -ErrorAction SilentlyContinue; throw "L'agent s'est arrêté (code $($p.ExitCode))" }
+          Stop-Process -Id $p.Id -Force
+      - name: Désinstallation silencieuse
+        shell: pwsh
+        run: |
+          $app = Join-Path $env:ProgramFiles 'PrintDrop'
+          Start-Process (Join-Path $app 'unins000.exe') -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait
+          for ($i = 0; $i -lt 30 -and (Test-Path (Join-Path $app 'PrintDrop.exe')); $i++) { Start-Sleep 2 }
+          if (Test-Path (Join-Path $app 'PrintDrop.exe')) { throw "PrintDrop.exe toujours présent après désinstallation" }
+          if ((Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name PrintDrop -ErrorAction SilentlyContinue)) { throw "Démarrage automatique non retiré" }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rapport-${{ matrix.os }}
+          path: |
+            selftest.json
+            install.log
+
+  release:
+    needs: test  # published only if install + self-test passed on every Windows image
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      AGENT_VERSION: "0.4.0"
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: PrintDrop-Setup
+          path: dist
+      - name: Nom stable pour le lien de téléchargement
+        run: cp dist/PrintDrop-Setup-*.exe dist/PrintDrop-Setup.exe
       - name: Publication (GitHub Release)
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: agent-v${{ env.AGENT_VERSION }}
           name: Agent Windows PrintDrop ${{ env.AGENT_VERSION }}
           make_latest: true
           body: |
-            Installateur de l'agent Windows PrintDrop (Windows 10/11).
-            Lien direct permanent : https://github.com/${{ github.repository }}/releases/latest/download/PrintDrop-Setup.exe
+            Installateur de l'agent Windows PrintDrop (Windows 10/11), testé automatiquement (installation, auto-test, démarrage, désinstallation) sur Windows Server 2022 et 2025.
+            Pour le proposer aux boutiques : téléchargez PrintDrop-Setup-${{ env.AGENT_VERSION }}.exe puis envoyez-le dans Super-admin › Agent Windows sur printdrop.fr.
+            Empreinte SHA-256 : voir SHA256SUMS.txt.
             Si l'installateur n'est pas signé, Windows SmartScreen peut afficher « Informations complémentaires → Exécuter quand même ».
           files: |
-            agent/dist/PrintDrop-Setup.exe
-            agent/dist/PrintDrop-Setup-*.exe
+            dist/PrintDrop-Setup.exe
+            dist/PrintDrop-Setup-*.exe
+            dist/SHA256SUMS.txt

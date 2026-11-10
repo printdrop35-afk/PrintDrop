@@ -132,19 +132,24 @@ export default function Devices() {
             <Download className="size-5 text-azure" />
             <h3 className="mt-2 font-semibold text-ink">Installer l'agent Windows</h3>
             <ol className="mt-2 list-decimal space-y-1 pl-5 text-muted-foreground">
-              <li>Télécharger l'installateur PrintDrop (compilé par GitHub Actions) ou, à défaut, Python 3.10+ et SumatraPDF</li>
-              <li>Lancer l'installateur : démarrage automatique avec Windows proposé</li>
-              <li>Ouvrir PrintDrop et saisir le code d'appairage</li>
-              <li>Ajouter les imprimantes ci-dessous (USB ou Wi-Fi / Réseau)</li>
+              <li>Sur le PC du comptoir (Windows 10 ou 11), cliquez sur « Télécharger l'agent Windows »</li>
+              <li>Ouvrez le fichier. Si Windows affiche « Windows a protégé votre ordinateur », cliquez sur « Informations complémentaires » puis « Exécuter quand même »</li>
+              <li>Laissez cochée la case « Démarrer PrintDrop automatiquement avec Windows » (décochez-la si vous ne le souhaitez pas)</li>
+              <li>PrintDrop s'ouvre : saisissez le code d'appairage généré ci-dessus</li>
+              <li>Cliquez sur « Ajouter une imprimante » : les imprimantes USB, Wi-Fi et réseau du PC sont détectées</li>
             </ol>
             {release?.available ? (
               <a href={release.url} className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-azure px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-azure/90" data-testid="devices-download-agent">
-                <Download className="size-4" /> Télécharger l'agent (v{release.version})
+                <Download className="size-4" /> Télécharger l'agent Windows (v{release.version})
               </a>
-            ) : (
-              <p className="mt-3 rounded-lg bg-slate-50 p-2 text-xs text-muted-foreground" data-testid="devices-download-unavailable">Le téléchargement sera disponible dès que l'installateur aura été publié par PrintDrop.</p>
+            ) : null}
+            {release?.available && release.size_bytes > 0 ? (
+              <p className="mt-1 text-[11px] text-muted-foreground" data-testid="devices-download-meta">Windows 10/11 · {(release.size_bytes / 1048576).toFixed(1)} Mo · SHA-256 <span className="font-mono">{release.sha256.slice(0, 16)}…</span></p>
+            ) : null}
+            {release?.available ? null : (
+              <p className="mt-3 rounded-lg bg-slate-50 p-2 text-xs text-muted-foreground" data-testid="devices-download-unavailable">L'installateur Windows n'est pas encore publié : le bouton de téléchargement apparaîtra ici dès qu'il aura été compilé, testé et mis en ligne par PrintDrop.</p>
             )}
-            <p className="mt-2 text-xs text-muted-foreground">Guide complet : <span className="font-mono">agent/README.md</span></p>
+
           </section>
           <section className="rounded-2xl border bg-card p-5 text-sm" data-testid="notification-config">
             <h3 className="font-semibold text-ink">Notifications « commande prête »</h3>

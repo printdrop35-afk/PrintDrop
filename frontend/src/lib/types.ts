@@ -163,9 +163,9 @@ export interface PrintDirectIn { printer_id: string | null; dry_check: boolean }
 export interface PrintCheckLine { line_index: number; filename: string | null; printer_id: string | null; printer_name: string | null; problems: string[]; warnings: string[] }
 export interface PrintCheckOut { ok: boolean; problems: string[]; lines: PrintCheckLine[]; jobs_created: number }
 export interface OnboardingStep { key: string; label: string; done: boolean; auto: boolean; link: string }
-export interface AgentDownloadOut { available: boolean; url: string; version: string; notes: string }
+export interface AgentDownloadOut { available: boolean; url: string; version: string; notes: string; sha256: string; size_bytes: number }
 export interface AgentReleaseIn { url: string; version: string; notes: string }
-export interface AgentReleaseOut extends AgentReleaseIn { updated_at: string | null }
+export interface AgentReleaseOut extends AgentReleaseIn { updated_at: string | null; external_url: string; filename: string; sha256: string; size_bytes: number }
 
 export interface AlertOut {
   kind: "agent_offline" | "printer_offline" | "job_failed" | "low_paper"; message: string; since: string;

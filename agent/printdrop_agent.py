@@ -728,13 +728,53 @@ class Agent:
 
 # ---------------------------------------------------------------- pairing, GUI, CLI
 def pair(server: str, code: str, name: str) -> str:
-    r = requests.post(f"{server.rstrip('/')}/api/agent/pair", timeout=30,
-                      json={"code": code.strip().upper(), "name": name, "hostname": socket.gethostname(), "version": VERSION})
+    if not code.strip():
+        raise SystemExit("Saisissez le code d'appairage affiché dans PrintDrop › Imprimantes et périphériques")
+    try:
+        r = requests.post(f"{server.rstrip('/')}/api/agent/pair", timeout=30,
+                          json={"code": code.strip().upper(), "name": name, "hostname": socket.gethostname(), "version": VERSION})
+    except requests.exceptions.SSLError:
+        raise SystemExit("Connexion sécurisée impossible : vérifiez la date et l'heure de Windows, puis réessayez")
+    except requests.RequestException:
+        raise SystemExit(f"Impossible de joindre {server} : vérifiez la connexion Internet ou le pare-feu / antivirus de ce PC")
     if r.status_code != 200:
-        raise SystemExit(f"Appairage refusé : {r.json().get('detail', r.text)}")
+        try:
+            detail = r.json().get("detail", "")
+        except ValueError:
+            detail = ""
+        raise SystemExit(f"Appairage refusé : {detail or f'erreur serveur {r.status_code}'} — générez un nouveau code dans PrintDrop et réessayez")
     data = r.json()
     save_json(CONFIG_FILE, {"server": server.rstrip("/"), "agent_id": data["agent_id"], "key": protect(data["api_key"]), "shop": data["shop_name"]})
     return data["shop_name"]
+
+
+def self_test(out: str, server: str = "") -> int:
+    """Installer check used by the GitHub Windows build (and by support): writes a JSON report, exit 0 only if
+    everything PrintDrop needs to print is present. Scanner (WIA) is reported but not required."""
+    res: dict = {"version": VERSION, "platform": sys.platform, "checks": {}}
+
+    def chk(name: str, fn, required: bool = True) -> None:
+        try:
+            res["checks"][name] = {"ok": True, "required": required, "detail": str(fn())[:300]}
+        except BaseException as exc:  # noqa: BLE001 - report everything
+            res["checks"][name] = {"ok": False, "required": required, "detail": str(exc)[:300]}
+
+    chk("requests", lambda: requests.__version__)
+    chk("pillow", lambda: __import__("PIL").__version__)
+    chk("win32print", lambda: __import__("win32print").GetDefaultPrinter() or "ok")
+    chk("sumatra", WindowsBackend._find_sumatra)
+    chk("printers", lambda: ", ".join(p["name"] for p in WindowsBackend(None).printers()) or "aucune")
+    chk("wia_scanner", lambda: len(list_scanner_caps()), required=False)
+    if server:
+        def pairing() -> str:
+            r = requests.post(f"{server.rstrip('/')}/api/agent/pair", timeout=30, json={"code": "XXXXXXXX", "name": "self-test", "hostname": "ci", "version": VERSION})
+            if r.status_code not in (400, 401, 404, 409, 410, 422, 429):
+                raise RuntimeError(f"réponse inattendue {r.status_code}")
+            return f"code invalide refusé proprement ({r.status_code})"
+        chk("server_pairing", pairing)
+    res["ok"] = all(c["ok"] for c in res["checks"].values() if c["required"])
+    Path(out).write_text(json.dumps(res, indent=2, ensure_ascii=False), encoding="utf-8")
+    return 0 if res["ok"] else 1
 
 
 def make_backend(dry_run: bool, sumatra: str | None = None):
@@ -812,7 +852,11 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", handlers=handlers)
     if len(sys.argv) == 1:
         return gui()
+    if sys.argv[1] == "--self-test":  # PrintDrop.exe --self-test report.json [server]
+        raise SystemExit(self_test(sys.argv[2] if len(sys.argv) > 2 else str(DATA_DIR / "self-test.json"), sys.argv[3] if len(sys.argv) > 3 else ""))
     if sys.argv[1] == "--background":
+        if not load_json(CONFIG_FILE, None):
+            return gui()  # started with Windows but not paired yet: show the pairing window instead of exiting silently
         start_agent()
         while True:
             time.sleep(3600)

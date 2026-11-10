@@ -731,6 +731,8 @@ class AgentDownloadOut(BaseModel):
     url: str
     version: str
     notes: str = ""
+    sha256: str = ""
+    size_bytes: int = 0
 
 
 class AgentReleaseIn(BaseModel):
@@ -740,10 +742,14 @@ class AgentReleaseIn(BaseModel):
 
 
 class AgentReleaseOut(BaseModel):
-    url: str
+    url: str  # what shops download (printdrop.fr file if uploaded, else external link)
     version: str
     notes: str
     updated_at: datetime | None
+    external_url: str = ""
+    filename: str = ""  # installer uploaded to printdrop.fr ("" = none)
+    sha256: str = ""
+    size_bytes: int = 0
 
 
 class AgentJobOut(BaseModel):

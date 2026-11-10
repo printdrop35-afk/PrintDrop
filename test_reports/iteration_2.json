@@ -1,0 +1,59 @@
+{
+  "passed": 7,
+  "failed": 0,
+  "bugs": [],
+  "action_items": [],
+  "retest_needed": false,
+  "checks": [
+    {
+      "criterion": "Installer is not shown as available before it is published",
+      "name": "owner-devices-download-unavailable",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Logged in as proprio@bastille.fr, /dashboard/imprimantes shows devices-download-unavailable notice, devices-download-agent button has count 0. Confirmed via curl: GET /api/agent-download -> {\"available\":false,...} for release version 0.2.0, no url, no hosted file."
+    },
+    {
+      "criterion": "Super-admin publishes the installer on printdrop.fr",
+      "name": "superadmin-publish-installer-and-shop-downloads",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Logged in as printdrop35@gmail.com, uploaded synthetic MZ+'Inno Setup'+>1MB file named PrintDrop-Setup-0.4.0.exe via agent-installer-upload input; agent-installer-info appeared showing v0.4.0 hosted. Then as owner, /dashboard/imprimantes showed devices-download-agent containing '0.4.0' plus devices-download-meta (size/SHA)."
+    },
+    {
+      "criterion": "Super-admin publishes/removes the installer; invalid files refused; shop downloads exact bytes; shop cannot publish",
+      "name": "test_tscheck_agent_installer_upload.py::test_installer_lifecycle_publish_download_remove",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "pytest: POST /admin/agent-release/upload with non-MZ, MZ-without-marker, and <1MB files -> 422 each, release unchanged; valid MZ+'Inno Setup'+1MB+500B file named PrintDrop-Setup-0.4.0.exe -> 200, version=0.4.0, url=/api/agent-download/file, sha256 64 hex matching hashlib.sha256(data). Owner POST upload / DELETE file -> 403. GET /agent-download/file as owner returned exact bytes with Content-Disposition containing PrintDrop-Setup-0.4.0.exe; anonymous GET /agent-download and /agent-download/file -> 401. DELETE /admin/agent-release/file -> 200, filename=='', subsequent owner GET /agent-download/file -> 404, available=false. Release restored to version 0.2.0 in finally block (verified by curl after run)."
+    },
+    {
+      "criterion": "Full backend regression (no collateral breakage)",
+      "name": "full backend suite",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "cd /app/backend && python -m pytest -q -> 63 passed in 30.02s (62 pre-existing + 1 new test_tscheck_agent_installer_upload.py)."
+    },
+    {
+      "criterion": "Installer is not shown as available before it is published (public preview ingress)",
+      "name": "preview-devices-unavailable-after-cleanup",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-ran through https://print-drop-6--08uafkjn.preview.emergentagent.com after cleanup: devices-download-unavailable visible, devices-download-agent count 0, confirming release correctly left at version 0.2.0/no hosted file after test run."
+    },
+    {
+      "criterion": "Existing workflows not broken: order/counter pages load",
+      "name": "staff-view-order-pdf-details (pre-existing, re-run)",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-ran existing check from iteration 1 by name only; order detail sheet with PDF pages still renders correctly, no regression from this feature area."
+    },
+    {
+      "criterion": "Existing workflows not broken: order/counter pages load (public preview ingress)",
+      "name": "staff-view-order-pdf-details-preview (pre-existing, re-run)",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-ran existing check from iteration 1 by name only against the public preview URL; no regression."
+    }
+  ],
+  "notes": "Covers all 7 acceptance_matrix criteria: 2 new backend/browser artifacts for the installer upload feature plus full backend suite, one dedicated browser check for the unavailable-before-publish state (run once locally, once via public preview per protocol), and 2 re-runs of pre-existing checks to confirm 'existing workflows not broken'. Per spec_deviations, the hosted test installer was deleted and release left at version 0.2.0/no url after testing (verified by curl and by the preview-ingress re-check). No bugs found; feature behaves exactly per acceptance matrix."
+}
