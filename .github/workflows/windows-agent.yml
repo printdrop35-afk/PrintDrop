@@ -9,69 +9,25 @@ permissions:
   contents: write  # needed to publish the installer as a GitHub Release
 
 jobs:
+  # Same builder as the installer shipped in backend/agent_dist (agent/installer/build_nsis.sh).
   build:
-    runs-on: windows-latest
-    env:
-      AGENT_VERSION: "0.4.0"
-      # Code signing: add these two repository secrets (Settings → Secrets and variables → Actions) to sign; empty = unsigned build
-      WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
-      WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Dépendances
-        run: pip install -r agent/requirements.txt pyinstaller==6.11.1
-      - name: Compilation de PrintDrop.exe
-        working-directory: agent
-        run: pyinstaller --onefile --noconsole --name PrintDrop --hidden-import win32timezone --hidden-import win32com.client --hidden-import pythoncom --hidden-import PIL printdrop_agent.py
-      - name: SumatraPDF (moteur d'impression PDF, GPLv3)
-        working-directory: agent
-        shell: pwsh
-        run: |
-          Invoke-WebRequest "https://www.sumatrapdfreader.org/dl/rel/3.5.2/SumatraPDF-3.5.2-64.zip" -OutFile sumatra.zip
-          Expand-Archive sumatra.zip -DestinationPath sumatra
-          Copy-Item (Get-ChildItem sumatra -Filter *.exe -Recurse | Select-Object -First 1).FullName dist/SumatraPDF.exe
-      - name: Signature de PrintDrop.exe (si certificat configuré)
-        if: env.WINDOWS_CERT_PFX_BASE64 != ''
-        shell: pwsh
-        run: |
-          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\cert.pfx", [Convert]::FromBase64String($env:WINDOWS_CERT_PFX_BASE64))
-          $signtool = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName -Descending | Select-Object -First 1).FullName
-          & $signtool sign /f "$env:RUNNER_TEMP\cert.pfx" /p "$env:WINDOWS_CERT_PASSWORD" /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /d "PrintDrop" agent/dist/PrintDrop.exe
-          if ($LASTEXITCODE -ne 0) { throw "Échec de la signature de PrintDrop.exe" }
-      - name: Installateur (Inno Setup)
-        working-directory: agent/installer
-        run: |
-          choco install innosetup -y --no-progress
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" printdrop.iss
-      - name: Signature de l'installateur (si certificat configuré)
-        if: env.WINDOWS_CERT_PFX_BASE64 != ''
-        shell: pwsh
-        run: |
-          $signtool = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName -Descending | Select-Object -First 1).FullName
-          Get-ChildItem agent/dist/PrintDrop-Setup-*.exe | ForEach-Object {
-            & $signtool sign /f "$env:RUNNER_TEMP\cert.pfx" /p "$env:WINDOWS_CERT_PASSWORD" /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /d "Installateur PrintDrop" $_.FullName
-            if ($LASTEXITCODE -ne 0) { throw "Échec de la signature de l'installateur" }
-            & $signtool verify /pa $_.FullName
-          }
-          Remove-Item "$env:RUNNER_TEMP\cert.pfx" -Force
-      - name: Avertissement si non signé
-        if: env.WINDOWS_CERT_PFX_BASE64 == ''
-        run: echo "::warning::Installateur NON signé (secrets WINDOWS_CERT_PFX_BASE64 / WINDOWS_CERT_PASSWORD absents) - Windows SmartScreen affichera un avertissement."
-      - name: Empreinte SHA-256
-        shell: pwsh
-        run: Get-ChildItem agent/dist/PrintDrop-Setup-*.exe | ForEach-Object { (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower() + "  " + $_.Name } | Set-Content agent/dist/SHA256SUMS.txt
+      - name: Outils
+        run: sudo apt-get update && sudo apt-get install -y nsis msitools && pip install Pillow
+      - name: Construction de PrintDrop-Setup.exe
+        run: bash agent/installer/build_nsis.sh "$PWD/out"
       - uses: actions/upload-artifact@v4
         with:
           name: PrintDrop-Setup
-          path: |
-            agent/dist/PrintDrop-Setup-*.exe
-            agent/dist/SHA256SUMS.txt
+          path: out/*
 
-  # Real install / self-test / uninstall on GitHub's Windows images (Server 2022 = Windows 10 21H2 base, Server 2025 = Windows 11 24H2 base).
-  # Desktop Windows 10/11 with real printers must still be checked on a shop PC.
+  # Real install / self-test / start / uninstall on GitHub's Windows images
+  # (Server 2022 = Windows 10 21H2 base, Server 2025 = Windows 11 24H2 base). Real shop PCs with printers must still be checked.
   test:
     needs: build
     strategy:
@@ -79,83 +35,71 @@ jobs:
       matrix:
         os: [windows-2022, windows-2025]
     runs-on: ${{ matrix.os }}
-    env:
-      PAIRING_SERVER: https://printdrop.fr
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: PrintDrop-Setup
           path: dist
-      - name: Installation silencieuse (démarrage avec Windows coché)
+      - name: Installation silencieuse
         shell: pwsh
         run: |
           $setup = Get-ChildItem dist -Filter PrintDrop-Setup-*.exe | Select-Object -First 1
-          $p = Start-Process $setup.FullName -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/TASKS=autostart',"/LOG=$pwd\install.log" -Wait -PassThru
-          if ($p.ExitCode -ne 0) { Get-Content install.log; throw "Installation échouée (code $($p.ExitCode))" }
+          $p = Start-Process $setup.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Installation échouée (code $($p.ExitCode))" }
           $app = Join-Path $env:ProgramFiles 'PrintDrop'
-          foreach ($f in 'PrintDrop.exe','SumatraPDF.exe','unins000.exe') { if (-not (Test-Path (Join-Path $app $f))) { throw "Fichier manquant après installation : $f" } }
+          foreach ($f in 'printdrop_agent.py','SumatraPDF.exe','python\pythonw.exe','Desinstaller-PrintDrop.exe') { if (-not (Test-Path (Join-Path $app $f))) { throw "Manquant : $f" } }
           $run = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name PrintDrop -ErrorAction SilentlyContinue).PrintDrop
-          if (-not $run -or $run -notlike '*--background*') { throw "Démarrage automatique avec Windows non configuré" }
-          Write-Host "Démarrage auto : $run"
-      - name: Auto-test de l'agent installé (dépendances, spouleur, SumatraPDF, appairage avec printdrop.fr)
+          if (-not $run -or $run -notlike '*--background*') { throw "Démarrage automatique non configuré" }
+          Get-Process pythonw -ErrorAction SilentlyContinue | Stop-Process -Force
+      - name: Auto-test (Python embarqué, pywin32, Pillow, Tk, spouleur, SumatraPDF, appairage printdrop.fr)
         shell: pwsh
         run: |
-          $exe = Join-Path $env:ProgramFiles 'PrintDrop\PrintDrop.exe'
-          $t = Start-Process $exe -ArgumentList '--self-test',"$pwd\selftest.json",$env:PAIRING_SERVER -Wait -PassThru
-          if (-not (Test-Path selftest.json)) { throw "L'agent n'a produit aucun rapport (plantage au démarrage ?)" }
+          $app = Join-Path $env:ProgramFiles 'PrintDrop'
+          & "$app\python\python.exe" -c "import tkinter, win32print, win32com.client, pythoncom, PIL, requests; print('imports ok', tkinter.TkVersion)"
+          if ($LASTEXITCODE -ne 0) { throw "Import impossible dans le Python embarqué" }
+          & "$app\python\python.exe" "$app\printdrop_agent.py" --self-test "$pwd\selftest.json" https://printdrop.fr
+          $code = $LASTEXITCODE
           Get-Content selftest.json
-          if ($t.ExitCode -ne 0) { throw "Auto-test en échec (code $($t.ExitCode))" }
+          if ($code -ne 0) { throw "Auto-test en échec" }
       - name: Démarrage en arrière-plan (10 s sans plantage)
         shell: pwsh
         run: |
-          $exe = Join-Path $env:ProgramFiles 'PrintDrop\PrintDrop.exe'
-          $p = Start-Process $exe -ArgumentList '--background' -PassThru
+          $app = Join-Path $env:ProgramFiles 'PrintDrop'
+          $p = Start-Process "$app\python\pythonw.exe" -ArgumentList "`"$app\printdrop_agent.py`"",'--background' -PassThru
           Start-Sleep 10
-          if ($p.HasExited) { Get-Content "$env:LOCALAPPDATA\PrintDrop\agent.log" -ErrorAction SilentlyContinue; throw "L'agent s'est arrêté (code $($p.ExitCode))" }
+          if ($p.HasExited) { Get-Content "$env:LOCALAPPDATA\PrintDrop\agent.log" -ErrorAction SilentlyContinue; throw "L'agent s'est arrêté" }
           Stop-Process -Id $p.Id -Force
       - name: Désinstallation silencieuse
         shell: pwsh
         run: |
           $app = Join-Path $env:ProgramFiles 'PrintDrop'
-          Get-Process PrintDrop -ErrorAction SilentlyContinue | Stop-Process -Force  # window opened after silent install
-          Start-Sleep 2
-          Start-Process (Join-Path $app 'unins000.exe') -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait
-          for ($i = 0; $i -lt 30 -and (Test-Path (Join-Path $app 'PrintDrop.exe')); $i++) { Start-Sleep 2 }
-          if (Test-Path (Join-Path $app 'PrintDrop.exe')) { throw "PrintDrop.exe toujours présent après désinstallation" }
-          if ((Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name PrintDrop -ErrorAction SilentlyContinue)) { throw "Démarrage automatique non retiré" }
+          Start-Process "$app\Desinstaller-PrintDrop.exe" -ArgumentList '/S' -Wait
+          for ($i = 0; $i -lt 30 -and (Test-Path "$app\printdrop_agent.py"); $i++) { Start-Sleep 2 }
+          if (Test-Path "$app\printdrop_agent.py") { throw "Fichiers toujours présents" }
+          if (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name PrintDrop -ErrorAction SilentlyContinue) { throw "Démarrage automatique non retiré" }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: rapport-${{ matrix.os }}
-          path: |
-            selftest.json
-            install.log
+          path: selftest.json
 
   release:
-    needs: test  # published only if install + self-test passed on every Windows image
+    needs: test  # published only if every Windows test passed
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    env:
-      AGENT_VERSION: "0.4.0"
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: PrintDrop-Setup
           path: dist
-      - name: Nom stable pour le lien de téléchargement
-        run: cp dist/PrintDrop-Setup-*.exe dist/PrintDrop-Setup.exe
-      - name: Publication (GitHub Release)
-        uses: softprops/action-gh-release@v2
+      - name: Version
+        run: echo "AGENT_VERSION=$(ls dist/PrintDrop-Setup-*.exe | grep -oP '\d+\.\d+\.\d+')" >> "$GITHUB_ENV"
+      - uses: softprops/action-gh-release@v2
         with:
           tag_name: agent-v${{ env.AGENT_VERSION }}
           name: Agent Windows PrintDrop ${{ env.AGENT_VERSION }}
           make_latest: true
           body: |
-            Installateur de l'agent Windows PrintDrop (Windows 10/11), testé automatiquement (installation, auto-test, démarrage, désinstallation) sur Windows Server 2022 et 2025.
-            Pour le proposer aux boutiques : téléchargez PrintDrop-Setup-${{ env.AGENT_VERSION }}.exe puis envoyez-le dans Super-admin › Agent Windows sur printdrop.fr.
-            Empreinte SHA-256 : voir SHA256SUMS.txt.
-            Si l'installateur n'est pas signé, Windows SmartScreen peut afficher « Informations complémentaires → Exécuter quand même ».
-          files: |
-            dist/PrintDrop-Setup.exe
-            dist/PrintDrop-Setup-*.exe
-            dist/SHA256SUMS.txt
+            Installateur de l'agent Windows PrintDrop (Windows 10/11 64 bits), testé automatiquement sur Windows Server 2022 et 2025.
+            Pour le proposer aux boutiques : copiez-le dans backend/agent_dist (puis redéployez) ou envoyez-le dans Super-admin › Agent Windows.
+          files: dist/*

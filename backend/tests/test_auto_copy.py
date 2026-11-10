@@ -155,8 +155,14 @@ def test_agent_installer_hosted_on_printdrop(client):
     assert f.status_code == 200 and f.content == fake_exe and "PrintDrop-Setup-0.4.0.exe" in f.headers["content-disposition"]
     assert httpx.get(f"{BASE_URL}/agent-download/file").status_code == 401  # signed-in shops only
     assert admin.delete("/admin/agent-release/file").status_code == 200
-    assert owner.get("/agent-download").json()["available"] is (bool(before.get("external_url")))
-    assert owner.get("/agent-download/file").status_code == 404
+    after = owner.get("/agent-download").json()
+    from lib.agent_release import bundled_installer
+    b = bundled_installer()
+    if b and not before.get("external_url"):  # falls back to the installer shipped with the app
+        assert after["available"] and after["version"] == b["version"] and after["sha256"] == b["sha256"]
+        assert owner.get("/agent-download/file").status_code == 200
+    else:
+        assert after["available"] is bool(before.get("external_url"))
 
 
 def test_one_click_agent_update(client):

@@ -1,0 +1,66 @@
+{
+  "passed": 8,
+  "failed": 0,
+  "bugs": [],
+  "action_items": [],
+  "retest_needed": false,
+  "checks": [
+    {
+      "criterion": "A real Windows installer exists and is shipped with the app",
+      "name": "test_tscheck_installer_contents.py::test_shipped_installer_is_a_real_windows_nsis_exe / ::test_shipped_installer_sha256_matches_sidecar_file / ::test_shipped_installer_archive_contains_agent_and_runtime",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "/app/backend/agent_dist/PrintDrop-Setup-0.4.0.exe is 26286723 bytes (~26 MB), `file` reports 'PE32 executable ... Nullsoft Installer self-extracting archive'; sha256 3d766b55... matches PrintDrop-Setup-0.4.0.exe.sha256 exactly; `7z l` listing contains printdrop_agent.py, SumatraPDF.exe, python/python.exe, python/pythonw.exe, python/_tkinter.pyd, python/Lib/site-packages/win32/win32print.pyd, python/Lib/site-packages/pywin32_system32/pywintypes312.dll, PIL/Image.py, requests/__init__.py, certifi/__init__.py. 3 passed."
+    },
+    {
+      "criterion": "Download button on Imprimantes et périphériques",
+      "name": "owner-devices-download-shipped-installer",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Logged in as proprio@bastille.fr, /dashboard/imprimantes shows devices-download-agent containing 'v0.4.0', devices-download-meta with 'SHA-256', devices-download-unavailable absent. GET /api/agent-download response captured: available=true, version=0.4.0."
+    },
+    {
+      "criterion": "Download button on Imprimantes et périphériques (public preview ingress)",
+      "name": "preview-owner-devices-download-shipped",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Same flow re-run against https://print-drop-6--08uafkjn.preview.emergentagent.com; devices-download-agent 'v0.4.0' and devices-download-meta visible."
+    },
+    {
+      "criterion": "Download link really works",
+      "name": "test_tscheck_agent_installer_upload.py::test_installer_lifecycle_publish_download_remove",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "Pre-existing artifact, re-verified this run as part of the full suite: GET /api/agent-download -> available/url/version/sha256 fields validated; GET /api/agent-download/file as owner returns exact bytes with correct Content-Disposition; anonymous GET on both endpoints -> 401. Direct curl this iteration: GET /agent-download as owner -> {available:true,url:/api/agent-download/file,version:0.4.0,sha256:3d766b55...,size_bytes:26286723} matching the shipped file's own sha256."
+    },
+    {
+      "criterion": "Super-admin override still works",
+      "name": "superadmin-override-then-fallback-to-shipped",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Logged in as printdrop35@gmail.com; baseline agent-installer-info shows PrintDrop-Setup-0.4.0.exe (bundled). Uploaded synthetic MZ+'NullsoftInst'+>1MB file named PrintDrop-Setup-9.9.9.exe -> agent-installer-info updated to show '9.9.9', confirming override precedence. Clicked agent-installer-remove -> agent-installer-info reverted to PrintDrop-Setup-0.4.0.exe (bundled fallback), agent-installer-none never shown. Post-check curl confirmed /admin/agent-release back to version 0.4.0, filename PrintDrop-Setup-0.4.0.exe, sha256 matching the real shipped file (no residue left)."
+    },
+    {
+      "criterion": "Super-admin override still works (backend)",
+      "name": "test_tscheck_agent_installer_upload.py (upload/delete lifecycle, invalid files rejected, owner forbidden)",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "pytest: non-MZ / MZ-without-marker / <1MB files -> 422 each; owner POST upload and DELETE file -> 403; valid upload -> 200 with matching sha256; DELETE file falls back to bundled installer (sha256 equality asserted against lib.agent_release.bundled_installer()) or to filename=='' if no bundled installer present. Included in the 67-passed full suite run below."
+    },
+    {
+      "criterion": "Pairing endpoint used by the installed agent",
+      "name": "test_agent_notify.py::test_full_agent_flow_and_no_duplicates (pair_agent helper) + ad-hoc curl this iteration",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "Existing suite's pair_agent() helper: pairing-code -> POST /agent/pair with valid code -> 200 api_key, re-using the same (now consumed) code -> 404; heartbeat with printers list makes them appear via GET /shops/{id}/printers (verified again this iteration with a tscheck-prefixed printer name, then revoked). Direct curl this iteration: POST /agent/pair with code='BADCODE' -> 404 {\"detail\":\"Code d'appairage invalide ou expiré\"} (French). Included in the 67-passed full suite run."
+    },
+    {
+      "criterion": "No regression",
+      "name": "full backend suite",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "cd /app/backend && python -m pytest -q -p no:cacheprovider -> 67 passed in 30.50s (64 pre-existing + 3 new test_tscheck_installer_contents.py tests added this iteration)."
+    }
+  ],
+  "notes": "Briefing updated since iteration 2: the agent-download feature now ships a real signed-content Windows installer in backend/agent_dist by default (no more 'unavailable before publish' state), so the prior owner-devices-download-unavailable / preview-devices-unavailable-after-cleanup checks are now stale against the current default state and were superseded by owner-devices-download-shipped-installer / preview-owner-devices-download-shipped (left on disk, not deleted, but not counted toward this iteration's matrix). Added 3 new backend tests validating the real shipped .exe (PE32/NSIS format, sha256 sidecar match, embedded agent script + SumatraPDF + Python runtime incl. pywin32/win32print.pyd/pywintypes312.dll/PIL/requests/certifi). Added 2 new browser checks for the default-available download UI (local + public preview) and 1 new browser check proving super-admin override takes precedence then correctly falls back to the shipped installer (never to 'none') on removal. Pairing/heartbeat/printer-appearance criterion was already fully covered by the pre-existing test_agent_notify.py suite plus a direct re-verification curl this iteration (invalid code French 404, valid pairing, heartbeat, printer visible, agent revoked). Release state verified clean (version 0.4.0, filename PrintDrop-Setup-0.4.0.exe, sha256 of the real shipped file, no leftover override) after all browser/backend runs, per spec_deviations. All 7 acceptance_matrix criteria covered (one criterion, 'Super-admin override still works', got both a browser and a backend artifact since it spans UI + API); no bugs found."
+}

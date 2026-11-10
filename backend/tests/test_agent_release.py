@@ -40,7 +40,7 @@ def test_release_validation_permissions_and_update_flag():
         revoked = next(a for a in owner.get(f"/shops/{shop['id']}/agents").json() if a["id"] == paired["agent_id"])
         assert revoked["update_available"] is False  # revoked agents never nag
     finally:
-        admin.put("/admin/agent-release", json={"url": before["url"], "version": before["version"], "notes": before["notes"]})
+        admin.put("/admin/agent-release", json={"url": before.get("external_url", ""), "version": "0.2.0" if before.get("filename", "").startswith("PrintDrop-Setup") and not before.get("external_url") else before["version"], "notes": before["notes"]})
 
 
 def test_version_compare():

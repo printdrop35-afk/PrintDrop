@@ -300,12 +300,13 @@ async def agent_download(_: Principal = Depends(require_tenant("devices:read")))
 async def agent_download_file(_: Principal = Depends(require_tenant("devices:read"))):
     """The Windows installer hosted on printdrop.fr (uploaded by the super-admin)."""
     from fastapi.responses import Response
-    from lib.storage import StorageError, read_file
+    from lib.agent_release import read_installer
+    from lib.storage import StorageError
     r = await get_release()
     if not r["file_key"]:
         raise HTTPException(status_code=404, detail="Installateur pas encore publié")
     try:
-        data = await read_file(r["file_key"])
+        data = await read_installer(r["file_key"])
     except (StorageError, OSError) as exc:
         raise HTTPException(status_code=404, detail="Installateur introuvable sur le serveur — prévenez PrintDrop") from exc
     return Response(data, media_type="application/vnd.microsoft.portable-executable", headers={

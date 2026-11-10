@@ -34,7 +34,7 @@ import requests
 
 VERSION = "0.4.0"
 IS_WINDOWS = sys.platform == "win32"
-DEFAULT_SERVER = os.environ.get("PRINTDROP_SERVER", "https://print-drop-6.emergent.host")
+DEFAULT_SERVER = os.environ.get("PRINTDROP_SERVER", "https://printdrop.fr")
 DATA_DIR = Path(os.environ.get("PRINTDROP_AGENT_DIR") or (
     Path(os.environ.get("LOCALAPPDATA", "C:/ProgramData")) / "PrintDrop" if IS_WINDOWS else Path.home() / ".printdrop-agent"))
 CONFIG_FILE, JOURNAL_FILE, LOG_FILE = DATA_DIR / "config.json", DATA_DIR / "journal.json", DATA_DIR / "agent.log"
@@ -635,11 +635,14 @@ class Agent:
             dest.unlink(missing_ok=True)
             raise RuntimeError("Fichier de mise à jour corrompu (empreinte SHA-256 différente) : réessayez")
         import ctypes
-        params = f'/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /LOG="{TMP_DIR / "update.log"}"'
+        nsis = b"NullsoftInst" in dest.read_bytes()
+        params = "/S /UPDATE" if nsis else f'/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /LOG="{TMP_DIR / "update.log"}"'
         rc = ctypes.windll.shell32.ShellExecuteW(None, "runas", str(dest), params, None, 0)
         if rc <= 32:
             raise RuntimeError("Mise à jour annulée : l'autorisation administrateur de Windows a été refusée" if rc == 5
                                else f"Windows n'a pas pu lancer l'installateur (code {rc})")
+        if nsis:  # leave the files free for the installer (it waits a few seconds, then restarts the new agent)
+            threading.Timer(3.0, lambda: os._exit(0)).start()
         return {"installer_started": True, "version": pl["version"], "sha256": digest}
 
     def copy(self, pl: dict) -> dict:
@@ -870,6 +873,8 @@ def gui() -> None:
 
 def main() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    if len(sys.argv) == 1 or sys.argv[1] == "--background":
+        (DATA_DIR / "agent.pid").write_text(str(os.getpid()))  # lets the installer/uninstaller stop this agent cleanly
     handlers: list[logging.Handler] = [logging.FileHandler(LOG_FILE, encoding="utf-8")]
     if sys.stderr:
         handlers.append(logging.StreamHandler())

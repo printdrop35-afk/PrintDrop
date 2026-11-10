@@ -114,7 +114,7 @@ async def upload_agent_installer(file: UploadFile = File(...), version: str = Qu
         raise HTTPException(status_code=413, detail="Fichier trop volumineux (150 Mo maximum)")
     if len(data) < 1024 * 1024 or data[:2] != b"MZ":
         raise HTTPException(status_code=422, detail="Ce fichier n'est pas un programme Windows (.exe) complet")
-    if b"Inno Setup" not in data:
+    if b"Inno Setup" not in data and b"NullsoftInst" not in data:
         raise HTTPException(status_code=422, detail="Ce fichier n'est pas l'installateur PrintDrop : utilisez PrintDrop-Setup-x.y.z.exe produit par GitHub Actions")
     if not version:
         m = re.search(r"(\d+\.\d+\.\d+)", file.filename or "")
@@ -126,7 +126,7 @@ async def upload_agent_installer(file: UploadFile = File(...), version: str = Qu
     doc = {"id": RELEASE_ID, "file_key": key, "filename": f"PrintDrop-Setup-{version}.exe", "sha256": hashlib.sha256(data).hexdigest(),
            "size_bytes": len(data), "version": version, "notes": (notes or old.get("notes", "")).strip(), "updated_at": now_utc()}
     await db.platform_settings.update_one({"id": RELEASE_ID}, {"$set": doc}, upsert=True)
-    if old.get("file_key") and old["file_key"] != key:
+    if old.get("file_key") and old["file_key"] != key and not old["file_key"].startswith("bundled:"):
         await delete_file(old["file_key"])
     await audit("platform.agent_installer_upload", principal=p, resource_type="agent_release", resource_id=RELEASE_ID,
                 details={"version": version, "sha256": doc["sha256"], "size": len(data)})
@@ -136,7 +136,7 @@ async def upload_agent_installer(file: UploadFile = File(...), version: str = Qu
 @router.delete("/agent-release/file", response_model=AgentReleaseOut)
 async def remove_agent_installer(p: Principal = Depends(require_platform("platform:manage"))):
     old = await db.platform_settings.find_one({"id": RELEASE_ID}, {"_id": 0}) or {}
-    if old.get("file_key"):
+    if old.get("file_key") and not old["file_key"].startswith("bundled:"):
         await delete_file(old["file_key"])
     await db.platform_settings.update_one({"id": RELEASE_ID}, {"$set": {"file_key": "", "filename": "", "sha256": "", "size_bytes": 0, "updated_at": now_utc()}})
     await audit("platform.agent_installer_remove", principal=p, resource_type="agent_release", resource_id=RELEASE_ID, details={})

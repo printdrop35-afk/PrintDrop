@@ -50,7 +50,7 @@ export function AgentReleaseAdmin() {
       <div className="mt-4 rounded-xl border border-dashed p-4" data-testid="agent-installer-hosted">
         <p className="text-sm font-semibold text-ink">Installateur hébergé sur printdrop.fr (recommandé)</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Envoyez le fichier PrintDrop-Setup-x.y.z.exe produit par GitHub Actions (onglet Actions › « Agent Windows PrintDrop », publié seulement si les tests d'installation Windows ont réussi). La version est lue dans le nom du fichier.
+          Par défaut, les boutiques reçoivent l'installateur livré avec PrintDrop (backend/agent_dist). Pour publier une autre version sans redéployer, envoyez ici un fichier PrintDrop-Setup-x.y.z.exe (la version est lue dans le nom du fichier).
         </p>
         {hosted ? (
           <p className="mt-2 text-sm" data-testid="agent-installer-info">

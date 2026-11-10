@@ -110,13 +110,13 @@ async def heartbeat(body: AgentHeartbeatIn, a: AgentPrincipal = Depends(get_agen
 async def agent_installer(a: AgentPrincipal = Depends(get_agent)):
     """Installer download for the paired agent itself (one-click update), authenticated by its API key."""
     from fastapi.responses import Response
-    from lib.agent_release import get_release
-    from lib.storage import StorageError, read_file
+    from lib.agent_release import get_release, read_installer
+    from lib.storage import StorageError
     rel = await get_release()
     if not rel["file_key"]:
         raise HTTPException(status_code=404, detail="Installateur pas encore publié")
     try:
-        data = await read_file(rel["file_key"])
+        data = await read_installer(rel["file_key"])
     except (StorageError, OSError) as exc:
         raise HTTPException(status_code=404, detail="Installateur introuvable") from exc
     return Response(data, media_type="application/vnd.microsoft.portable-executable",

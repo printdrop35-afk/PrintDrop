@@ -63,7 +63,7 @@ export default function Devices() {
         <h1 className="mt-1 text-3xl font-bold text-ink">Imprimantes & agent</h1>
         <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
           L'agent local PrintDrop s'installe sur le PC Windows du comptoir et imprime automatiquement les commandes que vous lancez,
-          avec les pilotes de vos imprimantes. Version 0.2 : à valider sur votre matériel Windows 10/11 avant usage en production.
+          avec les pilotes de vos imprimantes (Windows 10 et 11, 64 bits). Aucun autre logiciel à installer.
         </p>
       </div>
 
@@ -155,7 +155,7 @@ export default function Devices() {
             <ol className="mt-2 list-decimal space-y-1 pl-5 text-muted-foreground">
               <li>Sur le PC du comptoir (Windows 10 ou 11), cliquez sur « Télécharger l'agent Windows »</li>
               <li>Ouvrez le fichier. Si Windows affiche « Windows a protégé votre ordinateur », cliquez sur « Informations complémentaires » puis « Exécuter quand même »</li>
-              <li>Laissez cochée la case « Démarrer PrintDrop automatiquement avec Windows » (décochez-la si vous ne le souhaitez pas)</li>
+              <li>Laissez cochée « Démarrer PrintDrop automatiquement avec Windows » (décochez-la si vous ne le souhaitez pas ; désactivable plus tard dans le Gestionnaire des tâches › Démarrage)</li>
               <li>PrintDrop s'ouvre : saisissez le code d'appairage généré ci-dessus</li>
               <li>Cliquez sur « Ajouter une imprimante » : les imprimantes USB, Wi-Fi et réseau du PC sont détectées</li>
             </ol>

@@ -1,1 +1,4 @@
 libreoffice-writer-nogui=4:7.4.7-1+deb12u14
+msitools=0.101+repack-1
+nsis=3.08-3+deb12u1
+p7zip-full=16.02+really26.02+dfsg-0+deb12u1

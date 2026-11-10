@@ -48,7 +48,7 @@ def test_installer_lifecycle_publish_download_remove():
         owner = owner_session()
         pre = owner.get("/agent-download").json()
         if not before.get("filename") and not before.get("external_url"):
-            assert pre["available"] is False
+            assert pre["available"] is False  # (with a shipped installer, before["filename"] is set)
 
         # --- Super-admin publishes the installer (criterion 2) ---
         data = make_installer("0.4.0")
@@ -95,12 +95,18 @@ def test_installer_lifecycle_publish_download_remove():
         r = admin.delete("/admin/agent-release/file")
         assert r.status_code == 200
         removed = r.json()
-        assert removed["filename"] == ""
-        assert owner.get("/agent-download/file").status_code == 404
+        from lib.agent_release import bundled_installer
+        bundled = bundled_installer()
         dl_after = owner.get("/agent-download").json()
-        # no file and (originally) no external url -> unavailable again, unless an external url pre-existed
-        if not before.get("external_url"):
-            assert dl_after["available"] is False
+        if bundled and not before.get("external_url"):
+            # falls back to the real installer shipped with the app (backend/agent_dist), never to the removed upload
+            assert removed["filename"] == bundled["filename"] and dl_after["sha256"] == bundled["sha256"]
+            assert owner.get("/agent-download/file").status_code == 200
+        else:
+            assert removed["filename"] == ""
+            assert owner.get("/agent-download/file").status_code == 404
+            if not before.get("external_url"):
+                assert dl_after["available"] is False
     finally:
         # restore original release state
         admin.delete("/admin/agent-release/file")
