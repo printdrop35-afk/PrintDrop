@@ -17,7 +17,7 @@ from lib.printing import CLAIM_LEASE_SECONDS, PRINT_LEASE_SECONDS, maybe_complet
 from lib.security import sha256
 from lib.storage import MEDIA_TYPES, StorageError, extract_pages, read_file
 from models.schemas import (
-    AgentClaimOut, AgentCommandResultIn, AgentHeartbeatIn, AgentHeartbeatOut, AgentJobOut, AgentPairIn, AgentPairOut, AgentReportIn, AgentReportOut,
+    AgentClaimOut, AgentCommandResultIn, AgentCopyProgressIn, AgentHeartbeatIn, AgentHeartbeatOut, AgentJobOut, AgentPairIn, AgentPairOut, AgentReportIn, AgentReportOut,
 )
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -104,6 +104,20 @@ async def heartbeat(body: AgentHeartbeatIn, a: AgentPrincipal = Depends(get_agen
         await db.agent_commands.update_many({"id": {"$in": [c["id"] for c in cmds]}}, {"$set": {"status": "sent", "sent_at": now}})
     return AgentHeartbeatOut(shop_name=shop["name"] if shop else "", poll_seconds=POLL_SECONDS,
                              commands=[{"id": c["id"], "type": c["type"], "payload": c["payload"]} for c in cmds])
+
+
+@router.post("/commands/{command_id}/progress")
+async def command_progress(command_id: str, body: AgentCopyProgressIn, a: AgentPrincipal = Depends(get_agent)):
+    """Live photocopy progress (pages scanned, pages printed per the Windows spooler). Also proves the PC is alive."""
+    cmd = await db.agent_commands.find_one({"id": command_id, "agent_id": a.agent_id, "org_id": a.org_id, "status": "sent", "type": "copy"}, {"_id": 0})
+    if not cmd:
+        raise HTTPException(status_code=404, detail="Commande inconnue")
+    now = now_utc()
+    await db.agents.update_one({"id": a.agent_id}, {"$set": {"last_seen_at": now}})
+    await db.orders.update_one({"id": cmd["payload"]["order_id"], "org_id": a.org_id, "copy_job.state": "running"}, {"$set": {
+        "copy_job.phase": body.phase, "copy_job.progress_scanned": body.scanned_pages, "copy_job.progress_printed_pages": body.printed_pages,
+        "copy_job.total_print_pages": body.total_pages, "updated_at": now}})
+    return {"ok": True}
 
 
 @router.post("/commands/{command_id}/result")

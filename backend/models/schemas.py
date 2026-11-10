@@ -344,6 +344,17 @@ class CopyJobOut(BaseModel):
     copies_printed: int | None = None  # None = not reported reliably
     error: str = ""
     confirmed_by: str = ""
+    phase: Literal["waiting", "scanning", "printing"] = "waiting"  # live progress reported by the agent
+    progress_scanned: int = 0
+    progress_printed_pages: int = 0  # pages the Windows spooler reports as printed so far
+    total_print_pages: int = 0  # pages × copies to print (known once the scan is finished)
+
+
+class AgentCopyProgressIn(BaseModel):
+    phase: Literal["scanning", "printing"]
+    scanned_pages: int = Field(default=0, ge=0, le=10_000)
+    printed_pages: int = Field(default=0, ge=0, le=100_000)
+    total_pages: int = Field(default=0, ge=0, le=100_000)
 
 
 class CopyConfirmIn(BaseModel):

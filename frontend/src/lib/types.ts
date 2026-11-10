@@ -227,6 +227,7 @@ export interface CopyIn { color: "bw" | "color"; paper_size: "A4" | "A3"; duplex
 export interface CopyJobOut {
   state: "running" | "needs_confirmation" | "done" | "failed"; printer_id: string; printer_name: string; source: "flatbed" | "feeder";
   copies_requested: number; scanned_pages: number; copies_printed: number | null; error: string; confirmed_by: string;
+  phase?: "waiting" | "scanning" | "printing"; progress_scanned?: number; progress_printed_pages?: number; total_print_pages?: number;
 }
 export interface CopyConfirmIn { originals: number; copies: number }
 export interface ScannerCaps { name: string; flatbed: boolean; feeder: boolean; duplex: boolean }

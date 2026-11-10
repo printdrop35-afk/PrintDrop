@@ -253,7 +253,7 @@ class WindowsBackend:
         subprocess.run(["rundll32", "printui.dll,PrintUIEntry", "/k", "/n", pl["printer_name"]], timeout=60, creationflags=NO_WINDOW, check=False)
         return {"submitted": True, "note": "Page de test transmise au spouleur Windows — vérifiez la sortie papier"}
 
-    def print_file(self, path: Path, job: dict, on_spooled) -> None:
+    def print_file(self, path: Path, job: dict, on_spooled, on_progress=None) -> None:
         o = job["options"]
         settings = [compress_pages(job["pages"]), "duplexlong" if o["duplex"] else "simplex",
                     "color" if o["color"] == "color" else "monochrome", f"{o['copies']}x", f"paper={PAPER[o['paper_size']]}"]
@@ -266,10 +266,10 @@ class WindowsBackend:
         if res.returncode != 0:
             raise PrintError(f"SumatraPDF code {res.returncode}")
         on_spooled()
-        self._wait_spool(job["printer_name"], path.name)
+        self._wait_spool(job["printer_name"], path.name, on_progress=on_progress)
 
     @staticmethod
-    def _wait_spool(printer: str, doc_name: str, timeout: int = 600) -> None:
+    def _wait_spool(printer: str, doc_name: str, timeout: int = 600, on_progress=None) -> None:
         """Attend que le travail quitte la file Windows. Fin = « terminé selon le pilote », pas une preuve papier."""
         import win32print
         h = win32print.OpenPrinter(printer)
@@ -281,6 +281,8 @@ class WindowsBackend:
                     return
                 if any(j["Status"] & 0x2 or j["Status"] & 0x100 for j in mine):  # JOB_STATUS_ERROR / DELETED
                     raise PrintError("Le spouleur signale une erreur sur ce travail")
+                if on_progress:  # pages printed so far, as counted by the Windows spooler / driver
+                    on_progress(sum(int(j.get("PagesPrinted") or 0) for j in mine))
                 time.sleep(2)
             raise PrintError("Travail toujours en file après 10 min — vérifiez l'imprimante")
         finally:
@@ -317,7 +319,7 @@ class DryRunBackend:
     def test_page(self, pl: dict) -> dict:
         return {"submitted": False, "note": "Mode simulation : aucune page imprimée"}
 
-    def print_file(self, path: Path, job: dict, on_spooled) -> None:
+    def print_file(self, path: Path, job: dict, on_spooled, on_progress=None) -> None:
         log.info("[SIMULATION] %s : %s page(s), aucune impression", job["order_code"], len(job["pages"]))
         on_spooled()
 
@@ -390,7 +392,7 @@ def _set_prop(props, pid: int, value) -> None:
             return
 
 
-def wia_scan(color: str, dpi: int, source: str, out_dir: Path, duplex: bool = False) -> list[Path]:
+def wia_scan(color: str, dpi: int, source: str, out_dir: Path, duplex: bool = False, on_page=None) -> list[Path]:
     """Scans one page (flatbed) or every page of the feeder. Returns JPEG files. Raises with a French message."""
     if sys.platform != "win32":
         raise RuntimeError("Le scan direct nécessite Windows (WIA)")
@@ -423,6 +425,8 @@ def wia_scan(color: str, dpi: int, source: str, out_dir: Path, duplex: bool = Fa
         path.unlink(missing_ok=True)
         img.SaveFile(str(path))
         files.append(path)
+        if on_page:
+            on_page(len(files))
         if source != "feeder":
             break
     return files
@@ -498,6 +502,7 @@ class Api:
 class Agent:
     def __init__(self, api: Api, backend):
         self.api, self.backend = api, backend
+        self.current_cmd = ""
         self.journal: dict = load_json(JOURNAL_FILE, {})
         self.status = "Démarrage…"
         self.stop = threading.Event()
@@ -548,6 +553,7 @@ class Agent:
                     "test_page": self.backend.test_page, "scan": self.scan, "discover_all": self.discover_all,
                     "install_printer": self.install_printer, "copy": self.copy}
         log.info("Commande reçue : %s", cmd["type"])
+        self.current_cmd = cmd["id"]
         try:
             body = {"ok": True, "result": handlers[cmd["type"]](cmd["payload"]), "error": ""}
         except Exception as exc:  # résultat honnête renvoyé au tableau de bord
@@ -623,13 +629,29 @@ class Agent:
         TMP_DIR.mkdir(parents=True, exist_ok=True)
         work = Path(tempfile.mkdtemp(prefix="copy-", dir=str(TMP_DIR)))
         try:
-            scans = wia_scan(pl["color"], int(pl.get("dpi", 300)), pl.get("source", "flatbed"), work)
+            cid = self.current_cmd
+
+            def progress(phase: str, scanned: int, printed: int = 0, total: int = 0) -> None:
+                try:  # best effort: a lost progress update never interrupts the copy
+                    self.api.post(f"/agent/commands/{cid}/progress", {"phase": phase, "scanned_pages": scanned, "printed_pages": printed, "total_pages": total})
+                except requests.RequestException:
+                    pass
+            progress("scanning", 0)
+            scans = wia_scan(pl["color"], int(pl.get("dpi", 300)), pl.get("source", "flatbed"), work, on_page=lambda n: progress("scanning", n))
+            total = len(scans) * int(pl["copies"])
+            last = {"t": 0.0}
+
+            def printed(n: int) -> None:
+                if time.time() - last["t"] >= 2:
+                    last["t"] = time.time()
+                    progress("printing", len(scans), min(n, total), total)
+            progress("printing", len(scans), 0, total)
             pdf = work / f"copie-{int(time.time())}.pdf"
             images_to_pdf(scans, pdf, pl["color"], int(pl.get("dpi", 300)))
             job = {"order_code": "photocopie", "printer_name": pl["printer_name"], "pages": list(range(1, len(scans) + 1)),
                    "options": {"duplex": bool(pl.get("duplex")), "color": pl["color"], "copies": int(pl["copies"]), "paper_size": pl["paper_size"]}}
             try:
-                self.backend.print_file(pdf, job, lambda: None)
+                self.backend.print_file(pdf, job, lambda: None, on_progress=printed)
             except PrintError as exc:
                 return {"scanned_pages": len(scans), "copies_printed": None, "spool_confirmed": False, "error": f"Impression interrompue : {exc}"}
             after = self.backend.status_of(pl["printer_name"])

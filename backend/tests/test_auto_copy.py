@@ -115,3 +115,20 @@ def test_discover_connect_verify_and_scan_pricing(client):
     pricing = owner.get(f"/shops/{shop['id']}").json()["pricing"] if owner.get(f"/shops/{shop['id']}").status_code == 200 else shop["pricing"]
     assert pricing.get("scan_color_cents") is not None or "scan_color_cents" in shop["pricing"]
     owner.post(f"/agents/{info['agent_id']}/revoke")
+
+
+def test_copy_live_progress(client):
+    owner, _ = fresh_owner()
+    info, agent, shop, printer = setup(owner, "PC progres")
+    o = start(owner, shop, printer, copies=3).json()
+    cmd = commands(agent, "copy")[0]
+    assert agent.post(f"/agent/commands/{cmd['id']}/progress", json={"phase": "scanning", "scanned_pages": 2}).status_code == 200
+    j = owner.get(f"/orders/{o['id']}").json()["copy_job"]
+    assert j["phase"] == "scanning" and j["progress_scanned"] == 2
+    agent.post(f"/agent/commands/{cmd['id']}/progress", json={"phase": "printing", "scanned_pages": 4, "printed_pages": 5, "total_pages": 12}).raise_for_status()
+    j = owner.get(f"/orders/{o['id']}").json()["copy_job"]
+    assert (j["phase"], j["progress_scanned"], j["progress_printed_pages"], j["total_print_pages"]) == ("printing", 4, 5, 12)
+    assert agent.post("/agent/commands/unknown/progress", json={"phase": "printing"}).status_code == 404
+    agent.post(f"/agent/commands/{cmd['id']}/result", json={"ok": True, "result": {"scanned_pages": 4, "copies_printed": 3, "spool_confirmed": True}})
+    assert agent.post(f"/agent/commands/{cmd['id']}/progress", json={"phase": "printing"}).status_code == 404  # finished
+    owner.post(f"/agents/{info['agent_id']}/revoke")

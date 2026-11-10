@@ -30,7 +30,7 @@ function Seg<T extends string | number>({ value, options, onChange, testid }: { 
 /** Steps after creation, for copy & scan orders: status → payment (Espèce / Carte) → completion. Idempotent on the server. */
 function CounterOrder({ order: initial, onDone }: { order: OrderOut; onDone: () => void }) {
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ["order", initial.id], queryFn: () => apiGet<OrderOut>(`/orders/${initial.id}`), initialData: initial, refetchInterval: 5000 });
+  const q = useQuery({ queryKey: ["order", initial.id], queryFn: () => apiGet<OrderOut>(`/orders/${initial.id}`), initialData: initial, refetchInterval: (qq) => (qq.state.data?.copy_job?.state === "running" ? 1500 : 5000) });
   const o = q.data;
   const [email, setEmail] = useState(o.customer_email ?? "");
   const refresh = (res: OrderOut) => { qc.setQueryData(["order", res.id], res); qc.invalidateQueries({ queryKey: ["orders"] }); };
@@ -66,9 +66,27 @@ function CounterOrder({ order: initial, onDone }: { order: OrderOut; onDone: () 
           </ol>
         )}
         {job?.state === "running" && (
-          <p className="flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950" data-testid="copy-running">
-            <Loader2 className="size-4 animate-spin" /> Photocopie automatique en cours sur « {job.printer_name} » : numérisation de l'original puis impression de {job.copies_requested} copie(s)… Ne retirez pas le document.
-          </p>
+          <div className="space-y-3 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950" data-testid="copy-running">
+            <p className="flex items-center gap-2 font-semibold"><Loader2 className="size-4 animate-spin" />
+              {job.phase === "printing" ? `Impression sur « ${job.printer_name} »…` : job.phase === "scanning" ? "Numérisation de l'original…" : `Envoi au PC du comptoir (« ${job.printer_name} »)…`}
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg bg-white p-3" data-testid="copy-progress-scanned">
+                <p className="text-xs text-muted-foreground">Pages numérisées</p>
+                <p className="font-heading text-2xl font-bold text-ink">{job.progress_scanned ?? 0}</p>
+              </div>
+              <div className="rounded-lg bg-white p-3" data-testid="copy-progress-printed">
+                <p className="text-xs text-muted-foreground">Pages imprimées (selon Windows)</p>
+                <p className="font-heading text-2xl font-bold text-ink">{job.progress_printed_pages ?? 0}{job.total_print_pages ? <span className="text-base font-medium text-muted-foreground"> / {job.total_print_pages}</span> : null}</p>
+                {!!job.total_print_pages && (
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200">
+                    <div className="h-full rounded-full bg-azure transition-[width] duration-500" style={{ width: `${Math.min(100, Math.round(((job.progress_printed_pages ?? 0) / job.total_print_pages) * 100))}%` }} />
+                  </div>
+                )}
+              </div>
+            </div>
+            <p className="text-xs">{job.copies_requested} copie(s) demandée(s). Ne retirez pas l'original. Le prix est calculé à la fin, sur les pages réellement copiées.</p>
+          </div>
         )}
         {job?.state === "failed" && (
           <div className="space-y-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900" data-testid="copy-failed">
