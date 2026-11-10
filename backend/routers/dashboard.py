@@ -233,6 +233,8 @@ async def record_counter_payment(order_id: str, body: OrderPayIn, p: Principal =
     order = await get_order_or_404(repo, order_id)
     if order["status"] == "cancelled":
         raise HTTPException(status_code=409, detail="Commande annulée")
+    if order.get("copy_job") and order["copy_job"]["state"] != "done":
+        raise HTTPException(status_code=409, detail="Le nombre de copies n'est pas encore confirmé — rien ne peut être encaissé")
     now = now_utc()
     # Atomic guard: only the first request flips unpaid -> paid; the amount comes from the stored order.
     matched = await repo.update_one("orders", {"id": order_id, "payment_status": "unpaid"}, {

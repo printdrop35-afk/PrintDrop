@@ -59,7 +59,8 @@ class Pricing(BaseModel):
     print: dict[str, ColorPrice]
     duplex_discount_pct: int = Field(ge=0, le=50)
     photocopy: ColorPrice
-    scan_cents: int = Field(ge=0, le=100_00)
+    scan_cents: int = Field(ge=0, le=100_00)  # scan N&B per page
+    scan_color_cents: int | None = Field(default=None, ge=0, le=100_00)  # scan couleur per page (None = same as N&B)
     min_order_cents: int = Field(default=0, ge=0, le=1000_00)
     services: list[ServiceItem] = Field(default_factory=list, max_length=50)
     rules: list[PricingRule] = Field(default_factory=list, max_length=20)
@@ -172,6 +173,7 @@ class PublicPricing(BaseModel):
     duplex_discount_pct: int
     photocopy: ColorPrice
     scan_cents: int
+    scan_color_cents: int | None = None
     min_order_cents: int
     services: list[ServiceItem]
     rules: list[PricingRule]
@@ -329,6 +331,24 @@ class OrderOut(BaseModel):
     updated_at: datetime
     history: list[StatusEvent]
     purged_at: datetime | None = None  # document files erased (pickup / cancellation); order data kept
+    copy_job: "CopyJobOut | None" = None  # automatic photocopy (scan + print by the Windows agent)
+
+
+class CopyJobOut(BaseModel):
+    state: Literal["running", "needs_confirmation", "done", "failed"]
+    printer_id: str
+    printer_name: str
+    source: Literal["flatbed", "feeder"] = "flatbed"
+    copies_requested: int
+    scanned_pages: int = 0
+    copies_printed: int | None = None  # None = not reported reliably
+    error: str = ""
+    confirmed_by: str = ""
+
+
+class CopyConfirmIn(BaseModel):
+    originals: int = Field(ge=0, le=500)  # pages really in the original
+    copies: int = Field(ge=0, le=500)  # complete copies that really came out
 
 
 class OrderStatusIn(BaseModel):
@@ -492,6 +512,8 @@ class AgentOut(BaseModel):
     created_at: datetime
     update_available: bool = False
     latest_version: str = ""
+    scanners: list[str] = Field(default_factory=list)
+    scanner_caps: list["ScannerCaps"] = Field(default_factory=list)
 
 
 class PrinterCapabilities(BaseModel):
@@ -528,6 +550,7 @@ class PrinterOut(BaseModel):
     supports_color: bool
     online: bool
     last_seen_at: datetime | None
+    verified_at: datetime | None = None  # last successful test by the agent (« Prête » requires it)
 
 
 class PrinterUpdateIn(BaseModel):
@@ -573,11 +596,19 @@ class AgentHeartbeatIn(BaseModel):
     drivers: list[str] = Field(default_factory=list, max_length=300)
     printers: list[AgentPrinterIn] = Field(default_factory=list, max_length=50)
     scanners: list[str] = Field(default_factory=list, max_length=20)  # WIA scanners seen by the agent
+    scanner_caps: list["ScannerCaps"] = Field(default_factory=list, max_length=20)
+
+
+class ScannerCaps(BaseModel):
+    name: str = Field(max_length=200)
+    flatbed: bool = True
+    feeder: bool = False
+    duplex: bool = False
 
 
 class AgentCommandOut(BaseModel):
     id: str
-    type: Literal["discover_usb", "discover_network", "add_network_printer", "test_connection", "test_page", "scan"]
+    type: Literal["discover_usb", "discover_network", "discover_all", "install_printer", "add_network_printer", "test_connection", "test_page", "scan", "copy"]
     payload: dict[str, Any]
 
 
@@ -600,6 +631,27 @@ class CommandOut(BaseModel):
     result: dict[str, Any]
     error: str
     created_at: datetime
+
+
+class AgentRefIn(BaseModel):
+    agent_id: str
+
+
+class ConnectPrinterIn(BaseModel):
+    agent_id: str
+    name: str = Field(min_length=1, max_length=200)  # Windows queue name
+
+
+class InstallPrinterIn(BaseModel):
+    agent_id: str
+    kind: Literal["network", "usb"]
+    name: str = Field(min_length=1, max_length=120)
+    host: str = Field(default="", max_length=100)
+    ipp_path: str = Field(default="ipp/print", max_length=120)
+    device_id: str = Field(default="", max_length=300)  # USB: Windows PnP instance id
+    manufacturer: str = Field(default="", max_length=100)
+    model: str = Field(default="", max_length=150)
+    connection_type: Literal["wifi", "ethernet", "network", "usb"] = "network"
 
 
 class DiscoverIn(BaseModel):
@@ -935,9 +987,11 @@ class CopyIn(BaseModel):
     color: Literal["bw", "color"] = "bw"
     paper_size: Literal["A4", "A3"] = "A4"
     duplex: bool = False
-    originals: int = Field(default=1, ge=1, le=500)  # pages of the paper original
+    originals: int = Field(default=1, ge=1, le=500)  # manual copy only: pages of the paper original
     copies: int = Field(default=1, ge=1, le=500)
     customer_name: str = Field(default="", max_length=80)
+    printer_id: str | None = None  # set = automatic copy (agent scans then prints); None = copier's own Copy button
+    source: Literal["flatbed", "feeder"] = "flatbed"
 
 
 class ScanSessionIn(BaseModel):
@@ -946,6 +1000,7 @@ class ScanSessionIn(BaseModel):
     color: Literal["bw", "color"] = "color"
     dpi: Literal[150, 200, 300, 600] = 300
     source: Literal["flatbed", "feeder"] = "flatbed"
+    duplex: bool = False
 
 
 class ScanPageOut(BaseModel):
@@ -970,6 +1025,8 @@ class ScanSessionOut(BaseModel):
     pages: list[ScanPageOut]
     agent_online: bool
     scanners: list[str]
+    scanner_caps: list[ScannerCaps] = Field(default_factory=list)
+    duplex: bool = False
     created_at: datetime
 
 
@@ -1025,3 +1082,8 @@ class CashSummaryOut(BaseModel):
     total_count: int
     payments: list[CashPaymentOut]
     generated_at: datetime
+
+
+OrderOut.model_rebuild()
+AgentOut.model_rebuild()
+AgentHeartbeatIn.model_rebuild()

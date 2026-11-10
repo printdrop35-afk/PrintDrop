@@ -33,7 +33,7 @@ async def _erase_documents(query: dict) -> tuple[int, int]:
     return deleted, failed
 
 
-SCAN_GRACE = timedelta(hours=24)  # digital scans: kept 24 h after the customer's first download
+SCAN_GRACE = timedelta(0)  # digital scans: erased right after the customer's first download
 
 
 def _due(order: dict) -> bool:

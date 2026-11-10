@@ -21,6 +21,7 @@ export interface Pricing {
   duplex_discount_pct: number;
   photocopy: ColorPrice;
   scan_cents: number;
+  scan_color_cents?: number | null;
   min_order_cents: number;
   services: ServiceItem[];
   rules: PricingRule[];
@@ -28,7 +29,7 @@ export interface Pricing {
 }
 export interface AutoDiscountOut { name: string; kind: "percent" | "fixed"; value: number; min_order_cents: number }
 export interface PublicPricing {
-  print: Record<PaperSize, ColorPrice>; duplex_discount_pct: number; photocopy: ColorPrice; scan_cents: number;
+  print: Record<PaperSize, ColorPrice>; duplex_discount_pct: number; photocopy: ColorPrice; scan_cents: number; scan_color_cents?: number | null;
   min_order_cents: number; services: ServiceItem[]; rules: PricingRule[]; auto_discounts: AutoDiscountOut[];
   has_promo_codes: boolean; vat_rate_bp: number;
 }
@@ -101,7 +102,7 @@ export interface OrderOut {
   customer_email: string | null; notify: boolean; note: string; lines: QuoteLine[]; total_cents: number;
   total_ht_cents: number | null; vat_cents: number | null; vat_rate_bp: number | null; discount_cents: number; currency: string; status: OrderStatus;
   payment_status: PaymentStatus; payment_method: string | null; paid_at: string | null;
-  created_at: string; updated_at: string; history: StatusEvent[]; purged_at?: string | null;
+  created_at: string; updated_at: string; history: StatusEvent[]; purged_at?: string | null; copy_job?: CopyJobOut | null;
 }
 export interface OrderStatusIn { status: OrderStatus ; confirm_code?: string }
 export interface OrderPayIn { method: "cash" | "card_terminal" }
@@ -143,13 +144,14 @@ export interface PairingCodeOut { code: string; expires_at: string }
 export interface AgentOut {
   id: string; name: string; hostname: string; version: string; status: "active" | "revoked"; online: boolean;
   last_seen_at: string | null; created_at: string; update_available: boolean; latest_version: string;
+  scanners?: string[]; scanner_caps?: ScannerCaps[];
 }
 export interface PrinterOut {
   id: string; agent_id: string; name: string; is_default: boolean; enabled: boolean; status: "online" | "offline" | "error";
   status_detail: string; supports_color: boolean; online: boolean; last_seen_at: string | null;
   display_name: string; connection_type: "usb" | "wifi" | "ethernet" | "network" | "virtual" | "unknown"; connection_confirmed: boolean;
   manufacturer: string; model: string; ip_address: string; port_name: string; driver_name: string; driver_ok: boolean | null;
-  capabilities: PrinterCapabilities; agent_name: string; active_jobs: number;
+  capabilities: PrinterCapabilities; agent_name: string; active_jobs: number; verified_at?: string | null;
 }
 export interface PrinterUpdateIn { enabled?: boolean; is_default?: boolean; display_name?: string; connection_type?: "usb" | "wifi" | "ethernet" | "network" }
 export interface PrinterCapabilities { paper_sizes: string[]; color: boolean | null; duplex: boolean | null; orientations: string[]; qualities: string[] }
@@ -221,12 +223,24 @@ export interface ContactMessageOut {
 export interface ContactMessageUpdateIn { handled: boolean }
 
 // ---------- counter services ----------
-export interface CopyIn { color: "bw" | "color"; paper_size: "A4" | "A3"; duplex: boolean; originals: number; copies: number; customer_name: string }
-export interface ScanSessionIn { agent_id: string | null; format: "pdf" | "jpg"; color: "bw" | "color"; dpi: 150 | 200 | 300 | 600; source: "flatbed" | "feeder" }
+export interface CopyIn { color: "bw" | "color"; paper_size: "A4" | "A3"; duplex: boolean; originals: number; copies: number; customer_name: string; printer_id: string | null; source: "flatbed" | "feeder" }
+export interface CopyJobOut {
+  state: "running" | "needs_confirmation" | "done" | "failed"; printer_id: string; printer_name: string; source: "flatbed" | "feeder";
+  copies_requested: number; scanned_pages: number; copies_printed: number | null; error: string; confirmed_by: string;
+}
+export interface CopyConfirmIn { originals: number; copies: number }
+export interface ScannerCaps { name: string; flatbed: boolean; feeder: boolean; duplex: boolean }
+export interface InstallPrinterIn {
+  agent_id: string; kind: "network" | "usb"; name: string; host: string; ipp_path: string; device_id: string;
+  manufacturer: string; model: string; connection_type: "wifi" | "ethernet" | "network" | "usb";
+}
+export interface DiscoveredNetwork { ip_address: string; hostname: string; protocols: string[]; already_installed: boolean; manufacturer: string; model: string }
+export interface DiscoveredUsb { name: string; device_id: string; manufacturer: string; error_code: number | null }
+export interface ScanSessionIn { agent_id: string | null; format: "pdf" | "jpg"; color: "bw" | "color"; dpi: 150 | 200 | 300 | 600; source: "flatbed" | "feeder"; duplex: boolean }
 export interface ScanPageOut { id: string; index: number; rotation: number; width: number; height: number }
 export interface ScanSessionOut extends ScanSessionIn {
   id: string; shop_id: string; status: "open" | "scanning" | "finalized"; error: string; order_id: string | null;
-  pages: ScanPageOut[]; agent_online: boolean; scanners: string[]; created_at: string;
+  pages: ScanPageOut[]; agent_online: boolean; scanners: string[]; scanner_caps: ScannerCaps[]; created_at: string;
 }
 export interface ScanFinalizeIn { customer_name: string; customer_email: string | null }
 export interface ScanPublicOut { shop_name: string; filename: string; pages: number; kind: string; paid: boolean; available: boolean; first_download_at: string | null }

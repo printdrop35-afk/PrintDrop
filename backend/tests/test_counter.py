@@ -82,17 +82,7 @@ def test_scan_multipage_pdf_qr_delivery_and_retention(client):
     assert f.status_code == 200 and len(PdfReader(io.BytesIO(f.content)).pages) == 2
     assert pub.get("/public/scans/not-a-real-token-xxxxxxxx/file").status_code == 404
     assert owner.get(f"/orders/{o['id']}").json()["status"] == "delivered"
-    # retention: kept < 24 h after the first download, deleted after
-    secret = {"Authorization": f"Bearer {os.environ['WEBHOOK_CRON_SECRET']}"}
-    client.post("/cron/retention", headers=secret)
-    time.sleep(1)
-    assert pub.get(f"/public/scans/{token}/file").status_code == 200
-    mongo.orders.update_one({"id": o["id"]}, {"$set": {"scan_downloaded_at": datetime.now(timezone.utc) - timedelta(hours=25)}})
-    client.post("/cron/retention", headers=secret)
-    for _ in range(20):
-        if owner.get(f"/orders/{o['id']}").json()["purged_at"]:
-            break
-        time.sleep(0.5)
+    # retention (shop rule): the scan is erased right after the customer's first download
     after = owner.get(f"/orders/{o['id']}").json()
     assert after["purged_at"] and after["payment_status"] == "paid_counter" and after["total_cents"] == o["total_cents"]
     assert pub.get(f"/public/scans/{token}/file").status_code == 410

@@ -102,11 +102,12 @@ function PricingEditor({ shop, shops, canEdit }: { shop: ShopOut; shops: ShopOut
               <NumInput value={p.duplex_discount_pct} onChange={(n) => set({ duplex_discount_pct: Math.min(50, n) })} testId="pricing-duplex-pct" className="w-20" /> %
             </div>
           </section>
-          <section className="grid gap-4 rounded-2xl border bg-card p-5 sm:grid-cols-3">
-            <label className="flex items-center gap-2 text-sm font-medium sm:col-span-3"><Checkbox checked={p.photocopy.active} onCheckedChange={(v: boolean) => set({ photocopy: { ...p.photocopy, active: v } })} data-testid="pricing-photocopy-active" />Photocopie proposée</label>
+          <section className="grid gap-4 rounded-2xl border bg-card p-5 sm:grid-cols-4">
+            <label className="flex items-center gap-2 text-sm font-medium sm:col-span-4"><Checkbox checked={p.photocopy.active} onCheckedChange={(v: boolean) => set({ photocopy: { ...p.photocopy, active: v } })} data-testid="pricing-photocopy-active" />Photocopie proposée</label>
             <div><p className="mb-1 text-xs text-muted-foreground">Photocopie N&B / page</p><EuroInput cents={p.photocopy.bw} onChange={(bw) => set({ photocopy: { ...p.photocopy, bw } })} testId="pricing-photocopy-bw" /><Ht cents={p.photocopy.bw} /></div>
             <div><p className="mb-1 text-xs text-muted-foreground">Photocopie couleur / page</p><EuroInput cents={p.photocopy.color} onChange={(color) => set({ photocopy: { ...p.photocopy, color } })} testId="pricing-photocopy-color" /><Ht cents={p.photocopy.color} /></div>
-            <div><p className="mb-1 text-xs text-muted-foreground">Numérisation / page</p><EuroInput cents={p.scan_cents} onChange={(scan_cents) => set({ scan_cents })} testId="pricing-scan" /><Ht cents={p.scan_cents} /></div>
+            <div><p className="mb-1 text-xs text-muted-foreground">Scan N&B / page</p><EuroInput cents={p.scan_cents} onChange={(scan_cents) => set({ scan_cents })} testId="pricing-scan" /><Ht cents={p.scan_cents} /></div>
+            <div><p className="mb-1 text-xs text-muted-foreground">Scan couleur / page</p><EuroInput cents={p.scan_color_cents ?? p.scan_cents} onChange={(scan_color_cents) => set({ scan_color_cents })} testId="pricing-scan-color" /><Ht cents={p.scan_color_cents ?? p.scan_cents} /></div>
           </section>
         </TabsContent>
 
@@ -196,7 +197,8 @@ function PricingEditor({ shop, shops, canEdit }: { shop: ShopOut; shops: ShopOut
                 <li key={s} className="flex justify-between py-2"><span>Impression {tk("paper", s)}</span><span className="font-mono">N&B {formatEUR(p.print[s].bw)} · Couleur {formatEUR(p.print[s].color)}</span></li>
               ))}
               {p.photocopy.active && <li className="flex justify-between py-2"><span>Photocopie</span><span className="font-mono">N&B {formatEUR(p.photocopy.bw)} · Couleur {formatEUR(p.photocopy.color)}</span></li>}
-              <li className="flex justify-between py-2"><span>Numérisation</span><span className="font-mono">{formatEUR(p.scan_cents)} / page</span></li>
+              <li className="flex justify-between py-2"><span>Scan N&B</span><span className="font-mono">{formatEUR(p.scan_cents)} / page</span></li>
+              <li className="flex justify-between py-2"><span>Scan couleur</span><span className="font-mono">{formatEUR(p.scan_color_cents ?? p.scan_cents)} / page</span></li>
               {p.services.filter((s) => s.active).map((s, i) => (
                 <li key={i} className="flex justify-between py-2"><span>{s.name}</span><span className="font-mono">{s.price_from ? "à partir de " : ""}{formatEUR(s.price_cents)} {tk("unit", s.unit)}</span></li>
               ))}

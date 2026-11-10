@@ -72,7 +72,8 @@ async def pair(body: AgentPairIn):
 @router.post("/heartbeat", response_model=AgentHeartbeatOut)
 async def heartbeat(body: AgentHeartbeatIn, a: AgentPrincipal = Depends(get_agent)):
     now = now_utc()
-    await db.agents.update_one({"id": a.agent_id}, {"$set": {"last_seen_at": now, "version": body.version, "drivers": body.drivers[:300], "scanners": body.scanners[:20]}})
+    await db.agents.update_one({"id": a.agent_id}, {"$set": {"last_seen_at": now, "version": body.version, "drivers": body.drivers[:300], "scanners": body.scanners[:20],
+                                                                  "scanner_caps": [c.model_dump() for c in body.scanner_caps[:20]]}})
     previous = {p["name"]: p.get("status") for p in await db.printers.find({"org_id": a.org_id, "agent_id": a.agent_id}, {"_id": 0, "name": 1, "status": 1}).to_list(100)}
     has_default = bool(await db.printers.find_one({"org_id": a.org_id, "shop_id": a.shop_id, "is_default": True}, {"_id": 1}))
     seen = []
@@ -107,11 +108,19 @@ async def heartbeat(body: AgentHeartbeatIn, a: AgentPrincipal = Depends(get_agen
 
 @router.post("/commands/{command_id}/result")
 async def command_result(command_id: str, body: AgentCommandResultIn, a: AgentPrincipal = Depends(get_agent)):
-    res = await db.agent_commands.update_one(
+    cmd = await db.agent_commands.find_one_and_update(
         {"id": command_id, "agent_id": a.agent_id, "org_id": a.org_id, "status": "sent"},
-        {"$set": {"status": "done" if body.ok else "failed", "result": body.result, "error": body.error, "done_at": now_utc()}})
-    if not res.matched_count:
+        {"$set": {"status": "done" if body.ok else "failed", "result": body.result, "error": body.error, "done_at": now_utc()}},
+        projection={"_id": 0})
+    if not cmd:
         raise HTTPException(status_code=404, detail="Commande inconnue")
+    if cmd["type"] == "copy":
+        from routers.counter import apply_copy_result
+        await apply_copy_result(cmd, body.ok, body.result, body.error)
+    elif cmd["type"] == "test_connection" and cmd["payload"].get("printer_name"):
+        # « Prête » is only shown after a successful real check by the agent
+        await db.printers.update_one({"org_id": a.org_id, "agent_id": a.agent_id, "name": cmd["payload"]["printer_name"]},
+                                     {"$set": {"verified_at": now_utc() if body.ok else None, "verify_error": "" if body.ok else body.error}})
     return {"ok": True}
 
 

@@ -19,6 +19,7 @@ from lib.storage import delete_file
 from lib.notify import check_agents_offline, process_notification_jobs
 from lib.printing import expire_stale_leases
 from migrations.runner import run_migrations
+from routers.counter import expire_copy_commands
 from routers import admin, agent, auth, billing, printers, dashboard, devices, public, reports, site, counter
 
 logger = logging.getLogger(__name__)
@@ -44,6 +45,7 @@ async def job_worker() -> None:
             await process_notification_jobs()
             await expire_stale_leases()
             await check_agents_offline()
+            await expire_copy_commands()
         except Exception as exc:
             logger.error("job_worker: %s", exc)
         await asyncio.sleep(5)

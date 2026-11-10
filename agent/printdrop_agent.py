@@ -31,7 +31,7 @@ from pathlib import Path
 
 import requests
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 IS_WINDOWS = sys.platform == "win32"
 DEFAULT_SERVER = os.environ.get("PRINTDROP_SERVER", "https://print-drop-6.emergent.host")
 DATA_DIR = Path(os.environ.get("PRINTDROP_AGENT_DIR") or (
@@ -357,6 +357,32 @@ def list_scanners() -> list[str]:
         return []
 
 
+def list_scanner_caps() -> list[dict]:
+    """WIA_DPS_DOCUMENT_HANDLING_CAPABILITIES (3086): FEED=1, FLAT=2, DUP=4 — only what the driver declares."""
+    if sys.platform != "win32":
+        return []
+    out = []
+    try:
+        import win32com.client
+        dm = win32com.client.Dispatch("WIA.DeviceManager")
+        for i in range(1, dm.DeviceInfos.Count + 1):
+            info = dm.DeviceInfos.Item(i)
+            if info.Type != 1:
+                continue
+            caps = 2
+            try:
+                dev = info.Connect()
+                for j in range(1, dev.Properties.Count + 1):
+                    if dev.Properties.Item(j).PropertyID == 3086:
+                        caps = int(dev.Properties.Item(j).Value)
+            except Exception:
+                pass
+            out.append({"name": info.Properties("Name").Value, "flatbed": bool(caps & 2) or not caps & 1, "feeder": bool(caps & 1), "duplex": bool(caps & 4)})
+    except Exception as exc:
+        log.debug("WIA indisponible : %s", exc)
+    return out
+
+
 def _set_prop(props, pid: int, value) -> None:
     for i in range(1, props.Count + 1):
         if props.Item(i).PropertyID == pid:
@@ -364,7 +390,7 @@ def _set_prop(props, pid: int, value) -> None:
             return
 
 
-def wia_scan(color: str, dpi: int, source: str, out_dir: Path) -> list[Path]:
+def wia_scan(color: str, dpi: int, source: str, out_dir: Path, duplex: bool = False) -> list[Path]:
     """Scans one page (flatbed) or every page of the feeder. Returns JPEG files. Raises with a French message."""
     if sys.platform != "win32":
         raise RuntimeError("Le scan direct nécessite Windows (WIA)")
@@ -377,7 +403,7 @@ def wia_scan(color: str, dpi: int, source: str, out_dir: Path) -> list[Path]:
         raise RuntimeError("Aucun scanner détecté par Windows — vérifiez le câble USB / le réseau et le pilote WIA du fabricant")
     device = infos[0].Connect()
     if source == "feeder":
-        _set_prop(device.Properties, 3088, 1)  # WIA_DPS_DOCUMENT_HANDLING_SELECT = FEEDER
+        _set_prop(device.Properties, 3088, 5 if duplex else 1)  # WIA_DPS_DOCUMENT_HANDLING_SELECT = FEEDER (| DUPLEX)
     item = device.Items(1)
     _set_prop(item.Properties, 6146, 1 if color == "color" else 2)  # current intent: colour / greyscale
     _set_prop(item.Properties, 6147, dpi)  # horizontal resolution
@@ -400,6 +426,53 @@ def wia_scan(color: str, dpi: int, source: str, out_dir: Path) -> list[Path]:
         if source != "feeder":
             break
     return files
+
+def ipp_make_model(host: str, path: str = "ipp/print", timeout: float = 2.0) -> str:
+    """IPP Get-Printer-Attributes → printer-make-and-model (what the printer itself reports, never guessed)."""
+    def attr(tag: int, name: bytes, value: bytes) -> bytes:
+        return bytes([tag]) + len(name).to_bytes(2, "big") + name + len(value).to_bytes(2, "big") + value
+    body = (b"\x02\x00\x00\x0b\x00\x00\x00\x01\x01" + attr(0x47, b"attributes-charset", b"utf-8")
+            + attr(0x48, b"attributes-natural-language", b"fr") + attr(0x45, b"printer-uri", f"ipp://{host}/{path}".encode())
+            + attr(0x44, b"requested-attributes", b"printer-make-and-model") + b"\x03")
+    try:
+        r = requests.post(f"http://{host}:631/{path}", data=body, headers={"Content-Type": "application/ipp"}, timeout=timeout)
+        data, key = r.content, b"printer-make-and-model"
+        i = data.find(key)
+        if i < 0:
+            return ""
+        i += len(key)
+        n = int.from_bytes(data[i:i + 2], "big")
+        return data[i + 2:i + 2 + n].decode("utf-8", "ignore").strip()
+    except Exception:
+        return ""
+
+
+def usb_devices_without_driver() -> list[dict]:
+    """USB devices Windows sees but has no working driver for (Device Manager error)."""
+    if sys.platform != "win32":
+        return []
+    try:
+        rows = json.loads(powershell("Get-CimInstance Win32_PnPEntity | Where-Object { $_.ConfigManagerErrorCode -ne 0 -and "
+                                     "($_.PNPDeviceID -like 'USB*' -or $_.PNPDeviceID -like 'USBPRINT*') } | "
+                                     "Select-Object Name,PNPDeviceID,Manufacturer,ConfigManagerErrorCode | ConvertTo-Json") or "[]")
+        rows = rows if isinstance(rows, list) else [rows]
+        return [{"name": r.get("Name") or "Appareil USB inconnu", "device_id": r.get("PNPDeviceID") or "", "manufacturer": r.get("Manufacturer") or "",
+                 "error_code": r.get("ConfigManagerErrorCode")} for r in rows]
+    except Exception:
+        return []
+
+
+def powershell_admin(script: str, timeout: int = 180) -> None:
+    """Runs a script elevated: Windows shows its administrator approval prompt to the employee."""
+    enc = base64.b64encode(script.encode("utf-16-le")).decode()
+    powershell(f"Start-Process powershell -Verb RunAs -Wait -WindowStyle Hidden -ArgumentList '-NoProfile','-EncodedCommand','{enc}'", timeout=timeout)
+
+
+def images_to_pdf(images: list[Path], dest: Path, color: str, dpi: int) -> None:
+    from PIL import Image
+    pages = [Image.open(p).convert("L" if color == "bw" else "RGB") for p in images]
+    pages[0].save(dest, "PDF", save_all=True, append_images=pages[1:], resolution=float(dpi))
+
 
 class Api:
     def __init__(self, server: str, key: str):
@@ -457,7 +530,7 @@ class Agent:
 
     def heartbeat(self) -> int:
         r = self.api.post("/agent/heartbeat", {"version": VERSION, "printers": self.backend.printers(), "drivers": self.backend.drivers()[:300],
-                                               "scanners": list_scanners()[:20]})
+                                               "scanners": list_scanners()[:20], "scanner_caps": list_scanner_caps()[:20]})
         if r.status_code == 401:
             raise SystemExit("Clé refusée : poste révoqué. Ré-associez-le depuis le tableau de bord.")
         r.raise_for_status()
@@ -472,7 +545,8 @@ class Agent:
                     "discover_network": lambda pl: {"devices": self.backend.discover_network(),
                                                     "installed": [p for p in self.backend.printers() if p["connection_type"] == "network"]},
                     "add_network_printer": self.backend.add_network_printer, "test_connection": self.backend.test_connection,
-                    "test_page": self.backend.test_page, "scan": self.scan}
+                    "test_page": self.backend.test_page, "scan": self.scan, "discover_all": self.discover_all,
+                    "install_printer": self.install_printer, "copy": self.copy}
         log.info("Commande reçue : %s", cmd["type"])
         try:
             body = {"ok": True, "result": handlers[cmd["type"]](cmd["payload"]), "error": ""}
@@ -487,7 +561,7 @@ class Agent:
         try:
             if isinstance(self.backend, DryRunBackend):
                 raise RuntimeError("MODE SIMULATION : aucun scanner n'est piloté")
-            for f in wia_scan(pl.get("color", "color"), int(pl.get("dpi", 300)), pl.get("source", "flatbed"), work):
+            for f in wia_scan(pl.get("color", "color"), int(pl.get("dpi", 300)), pl.get("source", "flatbed"), work, bool(pl.get("duplex"))):
                 with f.open("rb") as fh:
                     r = self.api.s.post(f"{self.api.server}/api/agent/scan-sessions/{pl['session_id']}/pages",
                                         files={"file": (f.name, fh, "image/jpeg")}, timeout=120)
@@ -496,6 +570,75 @@ class Agent:
             return {"pages": sent}
         finally:
             shutil.rmtree(work, ignore_errors=True)  # no scanned image stays on the PC
+
+    def discover_all(self, pl: dict) -> dict:
+        """Everything « Ajouter une imprimante » can offer: installed queues, network printers, USB devices lacking a driver."""
+        installed = self.backend.printers()
+        network = []
+        if not isinstance(self.backend, DryRunBackend):
+            for d in self.backend.discover_network():
+                if "ipp" in d["protocols"]:
+                    mm = ipp_make_model(d["ip_address"])
+                    d["model"] = mm
+                    d["manufacturer"] = mm.split()[0] if mm else ""
+                network.append(d)
+        return {"installed": installed, "network": network, "usb_missing_driver": usb_devices_without_driver(), "scanners": list_scanner_caps()}
+
+    def install_printer(self, pl: dict) -> dict:
+        if isinstance(self.backend, DryRunBackend):
+            raise PrintError("Mode simulation : aucune imprimante ne peut être installée")
+        q = lambda v: "'" + str(v).replace("'", "''") + "'"  # noqa: E731
+        before = {p["name"] for p in self.backend.printers()}
+        if pl["kind"] == "network":
+            host, name = pl["host"], pl["name"]
+            if not tcp_open(host, 631, 2):
+                raise PrintError(f"L'imprimante {host} ne répond pas en IPP : vérifiez qu'elle est allumée et sur le même Wi-Fi/réseau que ce PC")
+            script = f"Add-Printer -Name {q(name)} -IppURL {q(f'http://{host}:631/' + (pl.get('ipp_path') or 'ipp/print'))}"
+            try:
+                powershell(script, timeout=120)
+            except PrintError:
+                powershell_admin(script)  # Windows asks for administrator approval
+            self.backend._ports_at = 0
+            if name not in {p["name"] for p in self.backend.printers()}:
+                raise PrintError("Windows n'a pas pu installer cette imprimante sans pilote (IPP). Installez le pilote officiel du fabricant puis relancez la recherche.")
+            return {"installed": name}
+        powershell_admin("pnputil /scan-devices")  # USB: Windows looks for the driver (Windows Update / installed packages)
+        for _ in range(15):
+            time.sleep(2)
+            new = [p["name"] for p in self.backend.printers() if p["name"] not in before]
+            if new:
+                return {"installed": new[0]}
+        if pl.get("device_id") and any(d["device_id"] == pl["device_id"] for d in usb_devices_without_driver()):
+            raise PrintError("Windows n'a pas trouvé de pilote pour cet appareil USB. Installez le pilote officiel du fabricant puis relancez la recherche.")
+        raise PrintError("Aucune nouvelle imprimante n'est apparue dans Windows. Débranchez/rebranchez le câble USB puis relancez la recherche.")
+
+    def copy(self, pl: dict) -> dict:
+        """Automatic photocopy: WIA scan of the original, then print of the copies through the Windows spooler.
+        Raises only if nothing was scanned (=> no charge). Any doubt on printing is reported, never hidden."""
+        if isinstance(self.backend, DryRunBackend):
+            raise RuntimeError("MODE SIMULATION : aucun scanner ni copieur n'est piloté")
+        printer = self.backend.status_of(pl["printer_name"])
+        if not printer or printer["status"] != "online":
+            raise RuntimeError(f"Imprimante indisponible : {(printer or {}).get('detail') or 'introuvable dans Windows'}")
+        TMP_DIR.mkdir(parents=True, exist_ok=True)
+        work = Path(tempfile.mkdtemp(prefix="copy-", dir=str(TMP_DIR)))
+        try:
+            scans = wia_scan(pl["color"], int(pl.get("dpi", 300)), pl.get("source", "flatbed"), work)
+            pdf = work / f"copie-{int(time.time())}.pdf"
+            images_to_pdf(scans, pdf, pl["color"], int(pl.get("dpi", 300)))
+            job = {"order_code": "photocopie", "printer_name": pl["printer_name"], "pages": list(range(1, len(scans) + 1)),
+                   "options": {"duplex": bool(pl.get("duplex")), "color": pl["color"], "copies": int(pl["copies"]), "paper_size": pl["paper_size"]}}
+            try:
+                self.backend.print_file(pdf, job, lambda: None)
+            except PrintError as exc:
+                return {"scanned_pages": len(scans), "copies_printed": None, "spool_confirmed": False, "error": f"Impression interrompue : {exc}"}
+            after = self.backend.status_of(pl["printer_name"])
+            if after and after["status"] != "online":
+                return {"scanned_pages": len(scans), "copies_printed": None, "spool_confirmed": False,
+                        "error": f"L'imprimante signale : {after['detail'] or after['status']} — vérifiez les copies sorties"}
+            return {"scanned_pages": len(scans), "copies_printed": int(pl["copies"]), "spool_confirmed": True, "error": ""}
+        finally:
+            shutil.rmtree(work, ignore_errors=True)  # no copy of the customer's original stays on the PC
 
     def handle(self, job: dict) -> None:
         if job["id"] in self.journal:

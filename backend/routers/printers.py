@@ -14,7 +14,7 @@ from lib.authz import Principal, audit, now_utc, require_tenant, tenant_repo
 from lib.db import db
 from lib.printing import ACTIVE_JOB_STATUSES, check_printer, enqueue_initial_jobs, is_online, pick_printer, shop_printers
 from models.schemas import (
-    AgentDownloadOut, CommandOut, DiscoverIn, ManualPrinterIn, OnboardingStep, PrintCheckLine, PrintCheckOut, PrintDirectIn,
+    AgentDownloadOut, AgentRefIn, CommandOut, ConnectPrinterIn, DiscoverIn, InstallPrinterIn, ManualPrinterIn, OnboardingStep, PrintCheckLine, PrintCheckOut, PrintDirectIn,
     PrintJobOut, PrinterRulesIO, ReassignIn,
 )
 from routers.dashboard import get_order_or_404, get_shop_or_404
@@ -53,6 +53,47 @@ async def discover(shop_id: str, body: DiscoverIn, p: Principal = Depends(requir
     await get_shop_or_404(tenant_repo(p), shop_id)
     agent = await _agent_of_shop(p, shop_id, body.agent_id)
     return await _command(p, agent, "discover_usb" if body.kind == "usb" else "discover_network", {})
+
+
+@router.post("/shops/{shop_id}/printers/discover-all", response_model=CommandOut)
+async def discover_all(shop_id: str, body: AgentRefIn, p: Principal = Depends(require_tenant("devices:manage"))):
+    """« Ajouter une imprimante »: the agent lists printers installed in Windows, USB devices without a driver and
+    printers answering on the local network (with make/model when they report it over IPP)."""
+    await get_shop_or_404(tenant_repo(p), shop_id)
+    return await _command(p, await _agent_of_shop(p, shop_id, body.agent_id), "discover_all", {})
+
+
+@router.post("/shops/{shop_id}/printers/install", response_model=CommandOut)
+async def install_printer(shop_id: str, body: InstallPrinterIn, p: Principal = Depends(require_tenant("devices:manage"))):
+    """One-click install in Windows: network = driverless IPP (Microsoft IPP class driver); USB = Windows driver search.
+    Windows may ask the employee for administrator approval. Missing driver => the agent says so (never a fake success)."""
+    await get_shop_or_404(tenant_repo(p), shop_id)
+    if body.kind == "network" and not body.host:
+        raise HTTPException(status_code=422, detail="Adresse de l'imprimante manquante")
+    agent = await _agent_of_shop(p, shop_id, body.agent_id)
+    return await _command(p, agent, "install_printer", body.model_dump(exclude={"agent_id"}))
+
+
+@router.post("/shops/{shop_id}/printers/connect", response_model=CommandOut)
+async def connect_printer(shop_id: str, body: ConnectPrinterIn, p: Principal = Depends(require_tenant("devices:manage"))):
+    """« Connecter cette imprimante »: enables a Windows printer reported by the agent, then verifies it for real."""
+    import asyncio
+    repo = tenant_repo(p)
+    await get_shop_or_404(repo, shop_id)
+    agent = await _agent_of_shop(p, shop_id, body.agent_id)
+    pr = None
+    for _ in range(8):  # a printer installed a moment ago appears at the agent's next signal (≤ 5 s)
+        pr = await repo.find_one("printers", {"agent_id": agent["id"], "shop_id": shop_id, "name": body.name})
+        if pr:
+            break
+        await asyncio.sleep(1.5)
+    if not pr:
+        raise HTTPException(status_code=404, detail="Windows n'a pas encore signalé cette imprimante — patientez quelques secondes puis réessayez")
+    await repo.update_one("printers", {"id": pr["id"]}, {"$set": {"enabled": True, "verified_at": None}})
+    if not await repo.count("printers", {"shop_id": shop_id, "is_default": True, "enabled": True}):
+        await repo.update_one("printers", {"id": pr["id"]}, {"$set": {"is_default": True}})
+    await audit("printer.connect", principal=p, resource_type="printer", resource_id=pr["id"], details={"name": pr["name"]})
+    return await _command(p, agent, "test_connection", {"printer_name": pr["name"], "ip_address": pr.get("ip_address", "")})
 
 
 @router.post("/shops/{shop_id}/printers/manual", response_model=CommandOut)

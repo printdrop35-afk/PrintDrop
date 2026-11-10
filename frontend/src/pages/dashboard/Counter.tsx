@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
-import { Banknote, Copy, CreditCard, FileUp, Loader2, Printer, RotateCw, ScanLine, Smartphone, Trash2, Upload } from "lucide-react";
+import { AlertTriangle, Banknote, Check, Copy, CreditCard, FileUp, Loader2, Printer, RotateCw, ScanLine, Smartphone, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +11,7 @@ import { useDashboard } from "@/hooks/useDashboard";
 import { apiGet, apiPatch, apiPost, apiUpload, apiDelete, errorMessage } from "@/lib/api";
 import { formatEUR, tk } from "@/i18n";
 import { cn } from "@/lib/utils";
-import type { AgentOut, CopyIn, OrderOut, OrderStatus, QuoteOut, ScanSessionIn, ScanSessionOut } from "@/lib/types";
+import type { AgentOut, CopyIn, OrderOut, OrderStatus, PrinterOut, QuoteOut, ScanSessionIn, ScanSessionOut } from "@/lib/types";
 
 type Tab = "phone" | "copy" | "scan";
 
@@ -37,9 +37,15 @@ function CounterOrder({ order: initial, onDone }: { order: OrderOut; onDone: () 
   const status = useMutation({ mutationFn: (to: OrderStatus) => apiPost<OrderOut>(`/orders/${o.id}/status`, { status: to }), onSuccess: refresh, onError: (e) => toast.error(errorMessage(e)) });
   const pay = useMutation({ mutationFn: (method: "cash" | "card_terminal") => apiPost<OrderOut>(`/orders/${o.id}/pay`, { method }), onSuccess: refresh, onError: (e) => toast.error(errorMessage(e)) });
   const mail = useMutation({ mutationFn: () => apiPost(`/orders/${o.id}/scan-email`, { email }), onSuccess: () => toast.success("Lien envoyé par e-mail"), onError: (e) => toast.error(errorMessage(e)) });
+  const job = o.copy_job ?? null;
+  const [conf, setConf] = useState<{ originals: number; copies: number } | null>(null);
+  const confirm = useMutation({ mutationFn: (b: { originals: number; copies: number }) => apiPost<OrderOut>(`/orders/${o.id}/copy/confirm`, b), onSuccess: refresh, onError: (e) => toast.error(errorMessage(e)) });
+  const line = o.lines[0];
   const link = o.delivery_token ? `${window.location.origin}/scan/${o.delivery_token}` : "";
   const paid = o.payment_status !== "unpaid";
   const finished = ["picked_up", "delivered", "cancelled"].includes(o.status);
+  const payable = !job || job.state === "done";
+  const scanSteps: [string, boolean][] = [["Scan en cours", true], ["Scan terminé", true], ["Paiement effectué", paid], ["Document disponible", paid && !o.purged_at], ["Document récupéré", o.status === "delivered"]];
   return (
     <section className="space-y-4 rounded-2xl border bg-card p-5" data-testid="counter-order">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -50,7 +56,49 @@ function CounterOrder({ order: initial, onDone }: { order: OrderOut; onDone: () 
 
       <div className="space-y-2">
         <p className="text-xs font-semibold tracking-[0.15em] text-slate-500 uppercase">Étape 1 — Statut</p>
-        {o.service === "copy" && o.status === "printing" && (
+        {o.service === "scan" && (
+          <ol className="flex flex-wrap gap-2 text-xs" data-testid="scan-status-steps">
+            {scanSteps.map(([label, done], i) => (
+              <li key={label} className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold", done ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-500")} data-testid={`scan-step-${i}`}>
+                {done && <Check className="size-3" />}{label}
+              </li>
+            ))}
+          </ol>
+        )}
+        {job?.state === "running" && (
+          <p className="flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950" data-testid="copy-running">
+            <Loader2 className="size-4 animate-spin" /> Photocopie automatique en cours sur « {job.printer_name} » : numérisation de l'original puis impression de {job.copies_requested} copie(s)… Ne retirez pas le document.
+          </p>
+        )}
+        {job?.state === "failed" && (
+          <div className="space-y-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900" data-testid="copy-failed">
+            <p className="flex items-start gap-2"><AlertTriangle className="mt-0.5 size-4 shrink-0" /> {job.error || "La photocopie a échoué"}</p>
+            <p className="font-semibold">Rien n'a été facturé. Corrigez le problème puis relancez la photocopie.</p>
+          </div>
+        )}
+        {job?.state === "needs_confirmation" && (
+          <div className="space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950" data-testid="copy-confirm">
+            <p className="flex items-start gap-2"><AlertTriangle className="mt-0.5 size-4 shrink-0" /> {job.error}</p>
+            <p>À confirmer avant paiement : comptez ce qui est réellement sorti. {job.scanned_pages > 0 && `L'original numérisé compte ${job.scanned_pages} page(s).`}</p>
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="space-y-1"><Label htmlFor="conf-orig">Pages de l'original</Label>
+                <Input id="conf-orig" type="number" min={0} value={(conf ?? { originals: job.scanned_pages, copies: job.copies_printed ?? job.copies_requested }).originals}
+                  onChange={(e) => setConf({ originals: Math.max(0, Number(e.target.value) || 0), copies: conf?.copies ?? job.copies_printed ?? job.copies_requested })} className="h-10 w-24" data-testid="copy-confirm-originals" /></div>
+              <div className="space-y-1"><Label htmlFor="conf-copies">Copies complètes sorties</Label>
+                <Input id="conf-copies" type="number" min={0} value={(conf ?? { originals: job.scanned_pages, copies: job.copies_printed ?? job.copies_requested }).copies}
+                  onChange={(e) => setConf({ originals: conf?.originals ?? job.scanned_pages, copies: Math.max(0, Number(e.target.value) || 0) })} className="h-10 w-24" data-testid="copy-confirm-copies" /></div>
+              <Button disabled={confirm.isPending} onClick={() => confirm.mutate(conf ?? { originals: job.scanned_pages, copies: job.copies_printed ?? job.copies_requested })} data-testid="copy-confirm-submit">Confirmer le nombre de pages</Button>
+            </div>
+            <p className="text-xs">0 = aucune copie réussie : la commande est annulée sans rien facturer.</p>
+          </div>
+        )}
+        {job?.state === "done" && line && (
+          <p className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900" data-testid="copy-result">
+            {line.document_pages} page(s) × {line.copies} copie(s) = <strong>{line.pages} page(s) imprimée(s)</strong> · {formatEUR(line.unit_cents)} / page · Total <strong>{formatEUR(o.total_cents)}</strong>
+            {job.confirmed_by ? ` · confirmé par ${job.confirmed_by}` : " · confirmé par l'imprimante"}
+          </p>
+        )}
+        {o.service === "copy" && o.status === "printing" && !job && (
           <>
             <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950" data-testid="copy-instructions">
               Faites la copie avec le bouton <strong>Copie</strong> du copieur ({o.lines[0]?.label}, {o.lines[0]?.copies} exemplaire(s)).
@@ -59,15 +107,15 @@ function CounterOrder({ order: initial, onDone }: { order: OrderOut; onDone: () 
             <Button disabled={status.isPending} onClick={() => status.mutate("ready")} data-testid="copy-done-button"><Printer className="size-4" /> Copies sorties du copieur</Button>
           </>
         )}
-        {(o.status === "ready" || finished) && <p className="text-sm text-emerald-700" data-testid="counter-step1-done">{o.service === "scan" ? "Document numérisé." : "Copies réalisées."}</p>}
+        {(o.status === "ready" || (finished && o.status !== "cancelled")) && <p className="text-sm text-emerald-700" data-testid="counter-step1-done">{o.service === "scan" ? "Document numérisé." : "Copies réalisées."}</p>}
       </div>
 
       <div className="space-y-2" data-testid="counter-step-payment">
         <p className="text-xs font-semibold tracking-[0.15em] text-slate-500 uppercase">Étape 2 — Mode de paiement</p>
         {paid ? <p className="text-sm text-emerald-700" data-testid="counter-paid">Payé · {tk("method", o.payment_method ?? "cash")}</p> : (
           <div className="grid max-w-sm grid-cols-2 gap-2">
-            <Button variant="outline" className="h-11" disabled={pay.isPending || o.status === "printing"} onClick={() => pay.mutate("cash")} data-testid="counter-pay-cash"><Banknote className="size-4" /> Espèce</Button>
-            <Button variant="outline" className="h-11" disabled={pay.isPending || o.status === "printing"} onClick={() => pay.mutate("card_terminal")} data-testid="counter-pay-card"><CreditCard className="size-4" /> Carte</Button>
+            <Button variant="outline" className="h-11" disabled={pay.isPending || o.status === "printing" || !payable || o.status === "cancelled"} onClick={() => pay.mutate("cash")} data-testid="counter-pay-cash"><Banknote className="size-4" /> Espèce</Button>
+            <Button variant="outline" className="h-11" disabled={pay.isPending || o.status === "printing" || !payable || o.status === "cancelled"} onClick={() => pay.mutate("card_terminal")} data-testid="counter-pay-card"><CreditCard className="size-4" /> Carte</Button>
           </div>
         )}
       </div>
@@ -82,7 +130,7 @@ function CounterOrder({ order: initial, onDone }: { order: OrderOut; onDone: () 
               <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-mail du client (facultatif)" className="h-9" data-testid="scan-delivery-email" />
               <Button type="submit" size="sm" disabled={!email.includes("@") || mail.isPending} data-testid="scan-delivery-send">Envoyer</Button>
             </form>
-            <p className="text-xs text-muted-foreground">Fichier supprimé 24 h après le premier téléchargement du client.</p>
+            <p className="text-xs text-muted-foreground">Le fichier est supprimé de nos serveurs dès que le client l'a téléchargé.</p>
           </div>
         </div>
       )}
@@ -99,29 +147,71 @@ function CounterOrder({ order: initial, onDone }: { order: OrderOut; onDone: () 
 
 function CopyPanel({ onOrder }: { onOrder: (o: OrderOut) => void }) {
   const { shop } = useDashboard();
-  const [f, setF] = useState<CopyIn>({ color: "bw", paper_size: "A4", duplex: false, originals: 1, copies: 1, customer_name: "" });
+  const printers = useQuery({ queryKey: ["printers", shop.id], queryFn: () => apiGet<PrinterOut[]>(`/shops/${shop.id}/printers`), refetchInterval: 5000 });
+  const agents = useQuery({ queryKey: ["agents", shop.id], queryFn: () => apiGet<AgentOut[]>(`/shops/${shop.id}/agents`), refetchInterval: 10000 });
+  const usable = (printers.data ?? []).filter((p) => p.enabled && p.connection_type !== "virtual");
+  const [pid, setPid] = useState<string | null>(null);
+  const printer = usable.find((p) => p.id === pid) ?? usable.find((p) => p.is_default) ?? usable[0] ?? null;
+  const agent = (agents.data ?? []).find((a) => a.id === printer?.agent_id);
+  const caps = agent?.scanner_caps ?? [];
+  const hasScanner = (agent?.scanners?.length ?? 0) > 0;
+  const hasFeeder = caps.some((c) => c.feeder);
+  const auto = !!printer && printer.online && !!agent?.online && hasScanner;
+  const [f, setF] = useState<CopyIn>({ color: "bw", paper_size: "A4", duplex: false, originals: 1, copies: 1, customer_name: "", printer_id: null, source: "flatbed" });
   const set = (p: Partial<CopyIn>) => setF((x) => ({ ...x, ...p }));
-  const quote = useQuery({ queryKey: ["copy-quote", shop.id, f], queryFn: () => apiPost<QuoteOut>(`/shops/${shop.id}/counter/copy/quote`, f), retry: false });
-  const start = useMutation({ mutationFn: () => apiPost<OrderOut>(`/shops/${shop.id}/counter/copy`, f), onSuccess: onOrder, onError: (e) => toast.error(errorMessage(e)) });
-  const a3 = shop.pricing.print.A3?.active;
+  const quote = useQuery({ queryKey: ["copy-quote", shop.id, f], queryFn: () => apiPost<QuoteOut>(`/shops/${shop.id}/counter/copy/quote`, { ...f, printer_id: null }), retry: false });
+  const start = useMutation({ mutationFn: (automatic: boolean) => apiPost<OrderOut>(`/shops/${shop.id}/counter/copy`, { ...f, printer_id: automatic ? printer?.id ?? null : null, source: hasFeeder ? f.source : "flatbed" }),
+    onSuccess: onOrder, onError: (e) => toast.error(errorMessage(e)) });
+  const a3 = shop.pricing.print.A3?.active && (!printer || printer.capabilities.paper_sizes.length === 0 || printer.capabilities.paper_sizes.some((s) => s.toUpperCase().includes("A3")));
+  const colorOk = !printer || printer.supports_color;
+  const duplexOk = !printer || printer.capabilities.duplex !== false;
+  const unit = quote.data?.lines[0]?.unit_cents;
+  const why = !printer ? "Aucune imprimante connectée : ajoutez-en une dans Imprimantes et périphériques."
+    : !agent?.online ? "Le PC du comptoir est déconnecté : démarrez PrintDrop sur ce PC."
+    : !printer.online ? `« ${printer.display_name || printer.name} » est indisponible${printer.status_detail ? ` (${printer.status_detail})` : ""} : vérifiez qu'elle est allumée et prête.`
+    : !hasScanner ? "Aucun scanner détecté sur le PC du comptoir : installez la fonction scan de l'imprimante (pilote officiel)." : "";
   return (
     <section className="space-y-4 rounded-2xl border bg-card p-5" data-testid="copy-panel">
-      <div className="flex flex-wrap gap-4">
-        <div className="space-y-1.5"><Label>Couleur</Label><Seg value={f.color} options={[["bw", "N&B"], ["color", "Couleur"]]} onChange={(v) => set({ color: v })} testid="copy-color" /></div>
-        <div className="space-y-1.5"><Label>Format</Label><Seg value={f.paper_size} options={a3 ? [["A4", "A4"], ["A3", "A3"]] : [["A4", "A4"]]} onChange={(v) => set({ paper_size: v })} testid="copy-paper" /></div>
-        <div className="space-y-1.5"><Label>Impression</Label><Seg value={f.duplex ? "rv" : "r"} options={[["r", "Recto"], ["rv", "Recto-verso"]]} onChange={(v) => set({ duplex: v === "rv" })} testid="copy-duplex" /></div>
+      <ol className="flex flex-wrap gap-2 text-xs font-semibold text-slate-600" data-testid="copy-steps">
+        {["1. Placez l'original", "2. Choisissez les réglages", "3. Démarrer", "4. Copie automatique", "5. Pages et prix", "6. Paiement"].map((t) => <li key={t} className="rounded-full bg-slate-100 px-2.5 py-1">{t}</li>)}
+      </ol>
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-white p-3 text-sm" data-testid="copy-printer">
+        <Printer className={cn("size-4", auto ? "text-emerald-600" : "text-amber-600")} />
+        {usable.length > 1 ? (
+          <select value={printer?.id ?? ""} onChange={(e) => setPid(e.target.value)} className="h-9 rounded-md border px-2" data-testid="copy-printer-select">
+            {usable.map((p) => <option key={p.id} value={p.id}>{p.display_name || p.name}{p.online ? "" : " (indisponible)"}</option>)}
+          </select>
+        ) : <span className="font-semibold">{printer ? printer.display_name || printer.name : "Aucune imprimante"}</span>}
+        <span className={cn("text-xs font-semibold", auto ? "text-emerald-700" : "text-amber-700")} data-testid="copy-printer-status">{auto ? "Prête pour la photocopie automatique" : why}</span>
       </div>
       <div className="flex flex-wrap gap-4">
-        <div className="space-y-1.5"><Label htmlFor="orig">Pages de l'original</Label><Input id="orig" type="number" min={1} max={500} value={f.originals} onChange={(e) => set({ originals: Math.max(1, Number(e.target.value) || 1) })} className="h-10 w-28" data-testid="copy-originals" /></div>
+        <div className="space-y-1.5"><Label>Couleur</Label><Seg value={f.color} options={colorOk ? [["bw", "Noir et blanc"], ["color", "Couleur"]] : [["bw", "Noir et blanc"]]} onChange={(v) => set({ color: v })} testid="copy-color" /></div>
+        <div className="space-y-1.5"><Label>Format</Label><Seg value={f.paper_size} options={a3 ? [["A4", "A4"], ["A3", "A3"]] : [["A4", "A4"]]} onChange={(v) => set({ paper_size: v })} testid="copy-paper" /></div>
+        <div className="space-y-1.5"><Label>Impression</Label><Seg value={f.duplex ? "rv" : "r"} options={duplexOk ? [["r", "Recto"], ["rv", "Recto-verso"]] : [["r", "Recto"]]} onChange={(v) => set({ duplex: v === "rv" })} testid="copy-duplex" /></div>
+        {hasFeeder && <div className="space-y-1.5"><Label>Original</Label><Seg value={f.source} options={[["flatbed", "Sur la vitre"], ["feeder", "Dans le chargeur (ADF)"]]} onChange={(v) => set({ source: v })} testid="copy-source" /></div>}
+      </div>
+      <div className="flex flex-wrap gap-4">
         <div className="space-y-1.5"><Label htmlFor="copies">Nombre de copies</Label><Input id="copies" type="number" min={1} max={500} value={f.copies} onChange={(e) => set({ copies: Math.max(1, Number(e.target.value) || 1) })} className="h-10 w-28" data-testid="copy-copies" /></div>
         <div className="space-y-1.5"><Label htmlFor="cname">Client (facultatif)</Label><Input id="cname" value={f.customer_name} onChange={(e) => set({ customer_name: e.target.value })} className="h-10 w-56" data-testid="copy-customer" /></div>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 p-4">
-        <p className="text-sm" data-testid="copy-total">
-          {quote.isError ? <span className="text-rose-700">{errorMessage(quote.error)}</span> : <>Total : <strong className="font-heading text-xl text-ink">{quote.data ? formatEUR(quote.data.total_cents) : "…"}</strong> TTC · {f.originals * f.copies} page(s)</>}
+        <p className="text-sm" data-testid="copy-unit-price">
+          {quote.isError ? <span className="text-rose-700">{errorMessage(quote.error)}</span> : <>Prix : <strong className="text-ink">{unit !== undefined ? formatEUR(unit) : "…"}</strong> / page · le total est calculé sur les pages réellement copiées.</>}
         </p>
-        <Button className="h-11 px-6 font-bold" disabled={!quote.data || start.isPending} onClick={() => start.mutate()} data-testid="copy-start"><Copy className="size-4" /> Démarrer la copie</Button>
+        <Button className="h-11 px-6 font-bold" disabled={!auto || quote.isError || start.isPending} onClick={() => start.mutate(true)} data-testid="copy-start">
+          {start.isPending ? <Loader2 className="size-4 animate-spin" /> : <Copy className="size-4" />} Démarrer la photocopie
+        </Button>
       </div>
+      {!auto && (
+        <details className="rounded-xl border p-4 text-sm" data-testid="copy-manual">
+          <summary className="cursor-pointer font-semibold">Faire la copie avec le bouton « Copie » du copieur</summary>
+          <div className="mt-3 flex flex-wrap items-end gap-3">
+            <div className="space-y-1.5"><Label htmlFor="orig">Pages de l'original</Label><Input id="orig" type="number" min={1} max={500} value={f.originals} onChange={(e) => set({ originals: Math.max(1, Number(e.target.value) || 1) })} className="h-10 w-28" data-testid="copy-originals" /></div>
+            <p className="text-sm" data-testid="copy-total">Total : <strong className="font-heading text-lg text-ink">{quote.data ? formatEUR(quote.data.total_cents) : "…"}</strong> · {f.originals * f.copies} page(s)</p>
+            <Button variant="outline" disabled={!quote.data || start.isPending} onClick={() => start.mutate(false)} data-testid="copy-start-manual">Enregistrer une copie manuelle</Button>
+          </div>
+        </details>
+      )}
     </section>
   );
 }
@@ -131,7 +221,11 @@ function ScanPanel({ onOrder }: { onOrder: (o: OrderOut) => void }) {
   const qc = useQueryClient();
   const agents = useQuery({ queryKey: ["agents", shop.id], queryFn: () => apiGet<AgentOut[]>(`/shops/${shop.id}/agents`) });
   const online = (agents.data ?? []).filter((a) => a.status === "active" && a.online);
-  const [opt, setOpt] = useState<Omit<ScanSessionIn, "agent_id">>({ format: "pdf", color: "color", dpi: 300, source: "flatbed" });
+  const [opt, setOpt] = useState<Omit<ScanSessionIn, "agent_id">>({ format: "pdf", color: "color", dpi: 300, source: "flatbed", duplex: false });
+  const caps = online[0]?.scanner_caps ?? [];
+  const feederOk = caps.length === 0 || caps.some((c) => c.feeder);
+  const duplexOk = caps.some((c) => c.duplex);
+  const scanUnit = opt.color === "color" ? shop.pricing.scan_color_cents ?? shop.pricing.scan_cents : shop.pricing.scan_cents;
   const [sid, setSid] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -164,7 +258,9 @@ function ScanPanel({ onOrder }: { onOrder: (o: OrderOut) => void }) {
             <div className="space-y-1.5"><Label>Fichier</Label><Seg value={opt.format} options={[["pdf", "PDF"], ["jpg", "JPG"]]} onChange={(v) => setOpt({ ...opt, format: v })} testid="scan-format" /></div>
             <div className="space-y-1.5"><Label>Couleur</Label><Seg value={opt.color} options={[["bw", "N&B"], ["color", "Couleur"]]} onChange={(v) => setOpt({ ...opt, color: v })} testid="scan-color" /></div>
             <div className="space-y-1.5"><Label>Résolution</Label><Seg value={opt.dpi} options={[[150, "150"], [200, "200"], [300, "300"], [600, "600 ppp"]]} onChange={(v) => setOpt({ ...opt, dpi: v })} testid="scan-dpi" /></div>
-            <div className="space-y-1.5"><Label>Pages</Label><Seg value={opt.source} options={[["flatbed", "Une page (vitre)"], ["feeder", "Plusieurs pages (chargeur)"]]} onChange={(v) => setOpt({ ...opt, source: v })} testid="scan-source" /></div>
+            <div className="space-y-1.5"><Label>Pages</Label><Seg value={opt.source} options={feederOk ? [["flatbed", "Une page (vitre)"], ["feeder", "Plusieurs pages (chargeur ADF)"]] : [["flatbed", "Une page (vitre)"]]} onChange={(v) => setOpt({ ...opt, source: v, duplex: v === "feeder" && opt.duplex })} testid="scan-source" /></div>
+            {duplexOk && opt.source === "feeder" && <div className="space-y-1.5"><Label>Faces</Label><Seg value={opt.duplex ? "rv" : "r"} options={[["r", "Recto"], ["rv", "Recto-verso"]]} onChange={(v) => setOpt({ ...opt, duplex: v === "rv" })} testid="scan-duplex" /></div>}
+            <p className="self-end text-sm text-muted-foreground" data-testid="scan-unit-price">{formatEUR(scanUnit)} / page ({opt.color === "color" ? "couleur" : "N&B"})</p>
           </div>
           <Button className="h-11 px-6 font-bold" disabled={create.isPending} onClick={() => create.mutate()} data-testid="scan-new"><ScanLine className="size-4" /> Scan document</Button>
         </>
@@ -174,7 +270,7 @@ function ScanPanel({ onOrder }: { onOrder: (o: OrderOut) => void }) {
           <p className="text-sm text-muted-foreground">Placez le document {s.source === "feeder" ? "dans le chargeur" : "sur la vitre"}, puis lancez le scan. Les pages s'ajoutent à la suite.</p>
           <div className="flex flex-wrap gap-2">
             <Button disabled={!s.agent_online || s.status === "scanning" || scan.isPending} onClick={() => scan.mutate()} data-testid="scan-start">
-              {s.status === "scanning" ? <Loader2 className="size-4 animate-spin" /> : <ScanLine className="size-4" />} {pages.length ? "Scanner d'autres pages" : "Lancer le scan"}
+              {s.status === "scanning" ? <Loader2 className="size-4 animate-spin" /> : <ScanLine className="size-4" />} {pages.length ? "Scanner d'autres pages" : "Démarrer le scan"}
             </Button>
             <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg border bg-white px-3 text-sm font-medium hover:bg-slate-50" data-testid="scan-import">
               <Upload className="size-4" /> Importer des fichiers (JPG, PNG)
@@ -200,7 +296,7 @@ function ScanPanel({ onOrder }: { onOrder: (o: OrderOut) => void }) {
             <div className="flex flex-wrap items-end gap-3 rounded-xl bg-slate-50 p-4">
               <div className="space-y-1.5"><Label htmlFor="sname">Client (facultatif)</Label><Input id="sname" value={name} onChange={(e) => setName(e.target.value)} className="h-10 w-48" data-testid="scan-customer" /></div>
               <div className="space-y-1.5"><Label htmlFor="semail">E-mail (facultatif)</Label><Input id="semail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-10 w-56" data-testid="scan-email" /></div>
-              <p className="flex-1 text-sm" data-testid="scan-total">{pages.length} page(s) · <strong className="font-heading text-xl text-ink">{formatEUR(pages.length * shop.pricing.scan_cents)}</strong> TTC</p>
+              <p className="flex-1 text-sm" data-testid="scan-total">{pages.length} page(s) · <strong className="font-heading text-xl text-ink">{formatEUR(pages.length * (s.color === "color" ? shop.pricing.scan_color_cents ?? shop.pricing.scan_cents : shop.pricing.scan_cents))}</strong> TTC</p>
               <Button className="h-11 font-bold" disabled={finalize.isPending || s.status === "scanning"} onClick={() => finalize.mutate()} data-testid="scan-finalize">
                 <FileUp className="size-4" /> {s.format === "pdf" ? `Créer le PDF (${pages.length} page${pages.length > 1 ? "s" : ""})` : "Créer le JPG"}
               </Button>
