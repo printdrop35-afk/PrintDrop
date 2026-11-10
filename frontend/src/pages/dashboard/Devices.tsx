@@ -10,7 +10,7 @@ import { formatDateTime } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { PrinterManager, useAgentCommand } from "@/components/PrinterManager";
 import { AgentSetupGuide } from "@/components/AgentSetupGuide";
-import type { AgentDownloadOut, AgentOut, CommandOut, NotificationStatusOut, PairingCodeOut, PrinterOut, PrinterUpdateIn } from "@/lib/types";
+import type { AgentDownloadOut, AgentOut, CommandOut, UpdateAllOut, NotificationStatusOut, PairingCodeOut, PrinterOut, PrinterUpdateIn } from "@/lib/types";
 
 export default function Devices() {
   const { shop, can } = useDashboard();
@@ -37,6 +37,18 @@ export default function Devices() {
   const update = useMutation({
     mutationFn: (a: AgentOut) => apiPost<CommandOut>(`/agents/${a.id}/update`),
     onSuccess: (c, a) => { lastUpd.current = a.id; setUpdating((u) => ({ ...u, [a.id]: a.latest_version })); updCmd.start(c); },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  const [allResult, setAllResult] = useState<UpdateAllOut | null>(null);
+  const updateAll = useMutation({
+    mutationFn: () => apiPost<UpdateAllOut>("/agents/update-all"),
+    onSuccess: (r) => {
+      setAllResult(r);
+      setUpdating((u) => ({ ...u, ...Object.fromEntries(r.started.map((s) => [s.agent_id, r.version])) }));
+      if (r.started.length) toast.success(`Mise à jour lancée sur ${r.started.length} PC : acceptez la demande Windows sur chaque PC si elle s'affiche.`, { duration: 9000 });
+      else toast.info("Aucun PC n'a pu être mis à jour maintenant (voir le détail).");
+      qc.invalidateQueries({ queryKey: ["agents", shop.id] });
+    },
     onError: (e) => toast.error(errorMessage(e)),
   });
   const revoke = useMutation({
@@ -80,11 +92,29 @@ export default function Devices() {
                 </p>
                 {release?.notes && <p className="mt-1 text-xs text-sky-800" data-testid="agent-update-notes">Nouveautés : {release.notes}</p>}
               </div>
+              {manage && release?.available && (release.size_bytes ?? 0) > 0 && (
+                <Button size="sm" onClick={() => updateAll.mutate()} disabled={updateAll.isPending} data-testid="agent-update-all">
+                  {updateAll.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <ArrowUpCircle className="size-3.5" />} Mettre à jour tous les PC (toutes les boutiques)
+                </Button>
+              )}
               {release?.available && (
                 <a href={release.url} className="inline-flex items-center gap-1.5 rounded-lg bg-azure px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-azure/90" data-testid="agent-update-download">
                   <Download className="size-3.5" /> Mettre à jour
                 </a>
               )}
+            </section>
+          )}
+          {allResult && (
+            <section className="rounded-2xl border bg-card p-4 text-sm" data-testid="update-all-result">
+              <div className="flex items-center justify-between">
+                <p className="font-semibold text-ink">Mise à jour vers v{allResult.version}</p>
+                <Button size="xs" variant="ghost" onClick={() => setAllResult(null)} data-testid="update-all-close">Fermer</Button>
+              </div>
+              {allResult.started.length + allResult.skipped.length === 0 && <p className="mt-1 text-muted-foreground">Tous les PC sont déjà à jour.</p>}
+              <ul className="mt-2 space-y-1">
+                {allResult.started.map((s) => <li key={s.agent_id} className="text-emerald-800" data-testid={`update-all-started-${s.agent_id}`}>✓ {s.shop_name} · {s.name} : mise à jour lancée</li>)}
+                {allResult.skipped.map((s) => <li key={s.agent_id} className="text-amber-800" data-testid={`update-all-skipped-${s.agent_id}`}>• {s.shop_name} · {s.name} : {s.reason}</li>)}
+              </ul>
             </section>
           )}
           <section className="rounded-2xl border bg-card">

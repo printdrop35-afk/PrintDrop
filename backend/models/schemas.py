@@ -726,6 +726,19 @@ class OnboardingStep(BaseModel):
     link: str
 
 
+class AgentUpdateItem(BaseModel):
+    agent_id: str
+    name: str
+    shop_name: str
+    reason: str = ""  # why it was skipped ("" when started)
+
+
+class UpdateAllOut(BaseModel):
+    version: str
+    started: list[AgentUpdateItem]
+    skipped: list[AgentUpdateItem]
+
+
 class AgentDownloadOut(BaseModel):
     available: bool
     url: str

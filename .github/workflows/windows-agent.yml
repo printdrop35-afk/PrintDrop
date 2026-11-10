@@ -19,8 +19,18 @@ jobs:
           python-version: "3.12"
       - name: Outils
         run: sudo apt-get update && sudo apt-get install -y nsis msitools && pip install Pillow
-      - name: Construction de PrintDrop-Setup.exe
-        run: bash agent/installer/build_nsis.sh "$PWD/out"
+      - name: Construction de PrintDrop-Setup.exe (signé si les secrets WINDOWS_CERT_PFX_BASE64 / WINDOWS_CERT_PASSWORD existent)
+        env:
+          WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          SIGN_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          if [ -n "$WINDOWS_CERT_PFX_BASE64" ]; then
+            sudo apt-get install -y osslsigncode
+            echo "$WINDOWS_CERT_PFX_BASE64" | base64 -d > "$RUNNER_TEMP/cert.pfx"
+            export SIGN_PFX="$RUNNER_TEMP/cert.pfx"
+          fi
+          bash agent/installer/build_nsis.sh "$PWD/out"
+          rm -f "$RUNNER_TEMP/cert.pfx"
       - uses: actions/upload-artifact@v4
         with:
           name: PrintDrop-Setup

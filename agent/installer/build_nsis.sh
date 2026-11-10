@@ -37,5 +37,14 @@ from PIL import Image
 Image.open(sys.argv[2]).save(sys.argv[1], sizes=[(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
 PYICO
 makensis -V2 -DVERSION="$VERSION" -DSTAGE="$STAGE" -DOUTDIR="$OUT" "$HERE/printdrop.nsi"
+# Optional code signing (removes the SmartScreen warning): SIGN_PFX=/path/cert.pfx SIGN_PASSWORD=... (needs osslsigncode).
+if [ -n "${SIGN_PFX:-}" ]; then
+  EXE="$OUT/PrintDrop-Setup-$VERSION.exe"
+  osslsigncode sign -pkcs12 "$SIGN_PFX" -pass "${SIGN_PASSWORD:-}" -n "PrintDrop pour Windows" -i "https://printdrop.fr" \
+    -h sha256 -ts http://timestamp.digicert.com -in "$EXE" -out "$EXE.signed" && mv "$EXE.signed" "$EXE"
+  osslsigncode verify -in "$EXE" >/dev/null && echo "Installateur signé"
+else
+  echo "Installateur NON signé (SIGN_PFX absent) : Windows SmartScreen affichera un avertissement"
+fi
 cd "$OUT" && sha256sum "PrintDrop-Setup-$VERSION.exe" | tee "PrintDrop-Setup-$VERSION.exe.sha256"
 rm -rf "$WORK"

@@ -15,7 +15,7 @@ from lib.notify import twilio_configured
 from lib.printing import create_reprint, is_online
 from lib.security import sha256
 from models.schemas import (
-    AgentOut, CommandOut, NotificationOut, NotificationStatusOut, PairingCodeOut, PrinterOut, PrinterUpdateIn, PrintJobOut, ReprintIn,
+    AgentOut, CommandOut, NotificationOut, UpdateAllOut, NotificationStatusOut, PairingCodeOut, PrinterOut, PrinterUpdateIn, PrintJobOut, ReprintIn,
 )
 from routers.dashboard import get_order_or_404, get_shop_or_404
 
@@ -51,6 +51,35 @@ async def list_agents(shop_id: str, p: Principal = Depends(require_tenant("devic
 SELF_UPDATE_MIN = "0.4.0"  # first agent version that understands « self_update »
 
 
+def _update_blocker(agent: dict, rel: dict, pending: bool) -> str:
+    """French reason why this PC can't be updated now ("" = it can)."""
+    if not rel["file_key"]:
+        return "Aucun installateur n'est publié sur printdrop.fr pour le moment"
+    if not is_outdated(agent.get("version", ""), rel["version"]):
+        return "Déjà à jour"
+    if is_outdated(agent.get("version", ""), SELF_UPDATE_MIN):
+        return f"Version v{agent.get('version') or '?'} trop ancienne pour la mise à jour automatique : installez une fois la nouvelle version à la main"
+    if not is_online(agent.get("last_seen_at")):
+        return "PC hors ligne : démarrez PrintDrop sur ce PC puis réessayez"
+    if pending:
+        return "Mise à jour déjà en cours"
+    return ""
+
+
+async def _queue_update(repo, p: Principal, agent: dict, rel: dict) -> dict:
+    doc = {"id": str(uuid.uuid4()), "agent_id": agent["id"], "shop_id": agent["shop_id"], "type": "self_update",
+           "payload": {"version": rel["version"], "sha256": rel["sha256"], "size_bytes": rel["size_bytes"]},
+           "status": "queued", "result": {}, "error": "", "created_at": now_utc(), "requested_by": p.user_id}
+    await repo.insert("agent_commands", doc)
+    await audit("agent.self_update", principal=p, resource_type="agent", resource_id=agent["id"],
+                details={"from": agent.get("version", ""), "to": rel["version"]})
+    return doc
+
+
+async def _pending_update(repo, agent_id: str) -> bool:
+    return bool(await repo.count("agent_commands", {"agent_id": agent_id, "type": "self_update", "status": {"$in": ["queued", "sent"]}}))
+
+
 @router.post("/agents/{agent_id}/update", response_model=CommandOut)
 async def update_agent(agent_id: str, p: Principal = Depends(require_tenant("devices:manage"))):
     """« Mettre à jour en un clic »: the counter PC downloads the installer hosted on printdrop.fr, checks its SHA-256,
@@ -60,23 +89,31 @@ async def update_agent(agent_id: str, p: Principal = Depends(require_tenant("dev
     if not agent:
         raise HTTPException(status_code=404, detail="Agent introuvable")
     rel = await get_release()
-    if not rel["file_key"]:
-        raise HTTPException(status_code=409, detail="Aucun installateur n'est publié sur printdrop.fr pour le moment")
-    if not is_outdated(agent.get("version", ""), rel["version"]):
-        raise HTTPException(status_code=409, detail="Cet agent est déjà à jour")
-    if is_outdated(agent.get("version", ""), SELF_UPDATE_MIN):
-        raise HTTPException(status_code=409, detail=f"Cet agent (v{agent.get('version') or '?'}) est trop ancien pour la mise à jour automatique : installez une fois la nouvelle version à la main (bouton « Télécharger l'agent Windows »)")
-    if not is_online(agent.get("last_seen_at")):
-        raise HTTPException(status_code=409, detail="Le PC du comptoir est hors ligne : démarrez PrintDrop sur ce PC puis réessayez")
-    if await repo.count("agent_commands", {"agent_id": agent_id, "type": "self_update", "status": {"$in": ["queued", "sent"]}}):
-        raise HTTPException(status_code=409, detail="Une mise à jour est déjà en cours sur ce PC")
-    doc = {"id": str(uuid.uuid4()), "agent_id": agent_id, "shop_id": agent["shop_id"], "type": "self_update",
-           "payload": {"version": rel["version"], "sha256": rel["sha256"], "size_bytes": rel["size_bytes"]},
-           "status": "queued", "result": {}, "error": "", "created_at": now_utc(), "requested_by": p.user_id}
-    await repo.insert("agent_commands", doc)
-    await audit("agent.self_update", principal=p, resource_type="agent", resource_id=agent_id,
-                details={"from": agent.get("version", ""), "to": rel["version"]})
-    return doc
+    reason = _update_blocker(agent, rel, await _pending_update(repo, agent_id))
+    if reason:
+        raise HTTPException(status_code=409, detail="Cet agent est déjà à jour" if reason == "Déjà à jour" else reason)
+    return await _queue_update(repo, p, agent, rel)
+
+
+@router.post("/agents/update-all", response_model=UpdateAllOut)
+async def update_all_agents(p: Principal = Depends(require_tenant("devices:manage"))):
+    """« Mettre à jour tous les PC »: every outdated counter PC of every shop of the organisation, in one click.
+    Each PC that can't be updated right now is listed with the reason (offline, too old…)."""
+    repo = tenant_repo(p)
+    rel = await get_release()
+    shops = {s["id"]: s["name"] for s in await repo.find("shops", {})}
+    started, skipped = [], []
+    for a in await repo.find("agents", {"status": "active"}, sort=[("created_at", 1)]):
+        if not is_outdated(a.get("version", ""), rel["version"]):
+            continue  # already up to date: not listed
+        item = {"agent_id": a["id"], "name": a.get("name", "PC"), "shop_name": shops.get(a["shop_id"], "")}
+        reason = _update_blocker(a, rel, await _pending_update(repo, a["id"]))
+        if reason:
+            skipped.append({**item, "reason": reason})
+        else:
+            await _queue_update(repo, p, a, rel)
+            started.append(item)
+    return UpdateAllOut(version=rel["version"], started=started, skipped=skipped)
 
 
 @router.post("/agents/{agent_id}/revoke", response_model=AgentOut)
