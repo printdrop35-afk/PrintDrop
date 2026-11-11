@@ -26,7 +26,7 @@ function ReturnStatus({ invoiceId }: { invoiceId: string }) {
   });
   const inv = q.isError ? undefined : q.data;
   useEffect(() => {
-    // Google Ads « Purchase » conversion: once per paid invoice, only when the payment is confirmed by Mollie
+    // Google Ads « Purchase » conversion: once per paid invoice, only when the payment is confirmed by Stripe
     if (inv?.status === "paid") void reportConversion("purchase", inv.number || inv.id, { value: inv.amount_ttc_cents / 100, currency: "EUR" });
   }, [inv]);
   if (inv && inv.status !== "pending") {
@@ -36,8 +36,8 @@ function ReturnStatus({ invoiceId }: { invoiceId: string }) {
   return (
     <div className={cn("rounded-2xl border p-4 text-sm", inv?.status === "paid" ? "border-emerald-300 bg-emerald-50 text-emerald-900" : inv && inv.status !== "pending" ? "border-rose-300 bg-rose-50 text-rose-900" : "border-sky-200 bg-sky-50 text-sky-900")} data-testid="billing-return-status">
       {!inv ? "Vérification du paiement…" : inv.status === "pending"
-        ? <span className="flex items-center gap-2"><Loader2 className="size-4 animate-spin" /> Paiement en cours de confirmation par Mollie. Cette page se met à jour toute seule.</span>
-        : inv.status === "paid" ? `Paiement confirmé par Mollie — facture ${inv.number} émise, abonnement prolongé.`
+        ? <span className="flex items-center gap-2"><Loader2 className="size-4 animate-spin" /> Paiement en cours de confirmation par Stripe. Cette page se met à jour toute seule.</span>
+        : inv.status === "paid" ? `Paiement confirmé par Stripe — facture ${inv.number} émise, abonnement prolongé.`
         : `Paiement ${tk("invoice", inv.status).toLowerCase()} — aucun montant n'a été débité. Vous pouvez réessayer.`}
     </div>
   );
@@ -83,10 +83,10 @@ export default function Billing() {
       {data && !data.payment_configured && (
         <div className="flex gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" data-testid="billing-not-configured">
           <ShieldAlert className="size-5 shrink-0" />
-          Paiement en ligne pas encore activé par PrintDrop (clé Mollie manquante). Aucun paiement ne peut être effectué pour l'instant — votre essai ou abonnement continue normalement.
+          Paiement en ligne pas encore activé par PrintDrop (clé Stripe manquante). Aucun paiement ne peut être effectué pour l'instant — votre essai ou abonnement continue normalement.
         </div>
       )}
-      {data?.payment_mode === "test" && <p className="text-xs text-amber-700" data-testid="billing-test-mode">Mode test Mollie : aucun argent réel n'est débité.</p>}
+      {data?.payment_mode === "test" && <p className="text-xs text-amber-700" data-testid="billing-test-mode">Mode test Stripe : aucun argent réel n'est débité.</p>}
 
       <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1 sm:w-fit" data-testid="billing-period-toggle">
         {(["monthly", "yearly"] as const).map((pp) => (

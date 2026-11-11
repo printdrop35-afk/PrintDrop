@@ -167,7 +167,7 @@ def test_webhook_cannot_mark_paid(client):
     # forged webhook with a random id: nothing changes, 200 returned, no paid invoice appears
     db = _sync_db()
     before = db.invoices.count_documents({"status": "paid"})
-    assert client.post("/billing/mollie/webhook", data={"id": "tr_forged123"}).status_code == 200
+    assert client.post("/webhook/stripe", json={"type": "checkout.session.completed", "data": {"object": {"id": "cs_forged123", "payment_status": "paid"}}}).status_code == 200
     assert db.invoices.count_documents({"status": "paid"}) == before
 
 
@@ -182,7 +182,7 @@ def test_admin_plans_settings_subscription():
     assert owner.put("/admin/plans/starter", json=body).status_code == 403
     admin.put("/admin/plans/starter", json=body)
     s = admin.get("/admin/settings").json()
-    assert s["shop_vat_rate_bp"] == 2000 and s["payment_provider"] == "Mollie"
+    assert s["shop_vat_rate_bp"] == 2000 and s["payment_provider"] == "Stripe"
     org_id = owner.get("/auth/me").json()["org"]["id"]
     sub = admin.patch(f"/admin/organizations/{org_id}/subscription", json={"status": "canceled"}).json()
     assert sub["status"] == "canceled"

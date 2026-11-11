@@ -1,7 +1,7 @@
-"""SaaS subscriptions: plans, effective status, manual renewal, Mollie checkout + verified webhooks.
+"""SaaS subscriptions: plans, effective status, manual renewal, Stripe Checkout + verified webhooks.
 
-Payment truth comes ONLY from Mollie's API (GET /v2/payments/{id}) — never from the browser redirect
-nor from the webhook body (which only carries an id). Without MOLLIE_API_KEY, checkout is refused:
+Payment truth comes ONLY from Stripe's API (Checkout Session retrieve) — never from the browser redirect
+nor from the webhook body (only used to know which session to re-check). Without STRIPE_API_KEY, checkout is refused:
 no payment is ever simulated."""
 
 import logging
@@ -9,7 +9,7 @@ import os
 import uuid
 from datetime import datetime, timedelta, timezone
 
-import httpx
+from emergentintegrations.payments.stripe.checkout import CheckoutError, CheckoutSessionRequest, StripeCheckout
 from fastapi import HTTPException
 from pymongo import ReturnDocument
 
@@ -18,10 +18,8 @@ from lib.db import db
 from lib.platform import get_settings
 
 logger = logging.getLogger(__name__)
-MOLLIE_API = "https://api.mollie.com/v2"
 PERIOD_MONTHS = {"monthly": 1, "yearly": 12}
 LIVE_STATUSES = {"trialing", "active", "past_due"}
-FINAL_FAILED = {"failed": "failed", "canceled": "canceled", "expired": "expired"}
 
 DEFAULT_PLANS = [
     {"code": "starter", "name": "Starter", "description": "Pour un point de vente indépendant", "sort": 1,
@@ -110,41 +108,27 @@ def plan_out(plan: dict, vat_bp: int) -> dict:
     return {**plan, "vat_rate_bp": vat_bp, "prices_ttc": ttc}
 
 
-# ---------------- Mollie ----------------
-def mollie_key() -> str:
-    return os.environ.get("MOLLIE_API_KEY", "").strip()
+# ---------------- Stripe ----------------
+def stripe_key() -> str:
+    return os.environ.get("STRIPE_API_KEY", "").strip()
 
 
 def payment_mode() -> str:
-    key = mollie_key()
-    return "live" if key.startswith("live_") else "test" if key.startswith("test_") else "none"
+    key = stripe_key()
+    return "live" if key.startswith(("sk_live_", "rk_live_")) else "test" if key.startswith(("sk_test_", "rk_test_")) else "none"
 
 
-async def mollie(method: str, path: str, **kwargs) -> dict:
+def stripe_client(origin: str = "") -> StripeCheckout:
     if payment_mode() == "none":
         raise HTTPException(status_code=503, detail="Paiement en ligne non configuré — aucune transaction possible pour l'instant")
-    headers = {"Authorization": f"Bearer {mollie_key()}", "Accept": "application/json", **kwargs.pop("headers", {})}
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            res = await client.request(method, f"{MOLLIE_API}{path}", headers=headers, **kwargs)
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail="Prestataire de paiement injoignable, réessayez") from exc
-    if res.status_code >= 400:
-        logger.warning("Mollie %s %s -> %s %s", method, path, res.status_code, res.text[:300])
-        raise HTTPException(status_code=502, detail="Le prestataire de paiement a refusé la demande")
-    return res.json()
-
-
-def money(cents: int) -> str:
-    return f"{cents // 100}.{cents % 100:02d}"
+    return StripeCheckout(api_key=stripe_key(), webhook_url=f"{origin}/api/webhook/stripe" if origin else None)
 
 
 async def create_checkout(org: dict, plan: dict, period: str, origin: str, actor) -> dict:
     ht = plan["prices_ht"].get(period)
     if ht is None or not plan.get("active", True):
         raise HTTPException(status_code=422, detail="Cette offre n'est pas disponible pour cette période")
-    if payment_mode() == "none":
-        raise HTTPException(status_code=503, detail="Paiement en ligne non configuré — aucune transaction possible pour l'instant")
+    client = stripe_client(origin)
     settings = await get_settings()
     vat_bp = settings["subscription_vat_rate_bp"]
     vat = round(ht * vat_bp / 10000)
@@ -153,27 +137,26 @@ async def create_checkout(org: dict, plan: dict, period: str, origin: str, actor
         "id": str(uuid.uuid4()), "number": None, "org_id": org["id"], "status": "pending",
         "plan_code": plan["code"], "plan_name": plan["name"], "period": period,
         "amount_ht_cents": ht, "vat_rate_bp": vat_bp, "vat_cents": vat, "amount_ttc_cents": ht + vat,
-        "provider": "mollie", "provider_payment_id": None, "checkout_url": None, "mode": payment_mode(),
+        "provider": "stripe", "provider_payment_id": None, "checkout_url": None, "mode": payment_mode(),
         "period_start": None, "period_end": None, "created_at": now, "paid_at": None, "created_by": actor.email,
         "buyer_name": org["name"],
         "seller": {k: settings[k] for k in ("company_name", "company_address", "company_siret", "company_vat_number", "company_email")},
     }
-    await db.invoices.insert_one(dict(invoice))
-    payment = await mollie("POST", "/payments", json={
-        "amount": {"currency": "EUR", "value": money(invoice["amount_ttc_cents"])},
-        "description": f"PrintDrop {plan['name']} — {'mensuel' if period == 'monthly' else 'annuel'} — {org['name']}"[:255],
-        "redirectUrl": f"{origin}/dashboard/abonnement?facture={invoice['id']}",
-        "webhookUrl": f"{origin}/api/billing/mollie/webhook",
-        "metadata": {"invoice_id": invoice["id"], "org_id": org["id"]},
-        "locale": "fr_FR",
-    }, headers={"Idempotency-Key": invoice["id"]})
-    checkout = (payment.get("_links") or {}).get("checkout", {}).get("href")
-    await db.invoices.update_one({"id": invoice["id"]}, {"$set": {"provider_payment_id": payment["id"], "checkout_url": checkout}})
+    await db.invoices.insert_one(dict(invoice))  # recorded BEFORE redirecting to Stripe
+    back = f"{origin}/dashboard/abonnement?facture={invoice['id']}"
+    try:
+        session = await client.create_checkout_session(CheckoutSessionRequest(
+            amount=float(invoice["amount_ttc_cents"]) / 100, currency="eur",
+            success_url=f"{back}&session_id={{CHECKOUT_SESSION_ID}}", cancel_url=back,
+            metadata={"invoice_id": invoice["id"], "org_id": org["id"], "plan": plan["code"], "period": period}))
+    except CheckoutError as exc:
+        logger.warning("Stripe checkout failed for invoice %s: %s", invoice["id"], exc)
+        await db.invoices.update_one({"id": invoice["id"]}, {"$set": {"status": "failed"}})
+        raise HTTPException(status_code=502, detail="Le prestataire de paiement a refusé la demande") from exc
+    await db.invoices.update_one({"id": invoice["id"]}, {"$set": {"provider_payment_id": session.session_id, "checkout_url": session.url}})
     await audit("billing.checkout", principal=actor, resource_type="invoice", resource_id=invoice["id"],
                 details={"plan": plan["code"], "period": period, "amount_ttc_cents": invoice["amount_ttc_cents"]})
-    if not checkout:
-        raise HTTPException(status_code=502, detail="Lien de paiement indisponible, réessayez")
-    return {"invoice_id": invoice["id"], "checkout_url": checkout}
+    return {"invoice_id": invoice["id"], "checkout_url": session.url}
 
 
 async def next_invoice_number() -> str:
@@ -183,30 +166,28 @@ async def next_invoice_number() -> str:
     return f"PD-{year}-{counter['seq']:06d}"
 
 
-async def sync_invoice_from_mollie(invoice: dict) -> dict:
-    """Fetch the authoritative payment status from Mollie and apply it exactly once."""
+async def sync_invoice_from_stripe(invoice: dict) -> dict:
+    """Fetch the authoritative Checkout Session status from Stripe and apply it exactly once."""
     if not invoice.get("provider_payment_id") or invoice["status"] != "pending":
         return invoice
-    payment = await mollie("GET", f"/payments/{invoice['provider_payment_id']}")
-    amount = payment.get("amount") or {}
-    meta = payment.get("metadata") or {}
-    if (amount.get("currency") != "EUR" or amount.get("value") != money(invoice["amount_ttc_cents"])
-            or meta.get("invoice_id") != invoice["id"]):
-        logger.error("Mollie payment %s does not match invoice %s", payment.get("id"), invoice["id"])
+    try:
+        st = await stripe_client().get_checkout_status(invoice["provider_payment_id"])
+    except CheckoutError as exc:
+        raise HTTPException(status_code=502, detail="Prestataire de paiement injoignable, réessayez") from exc
+    if (st.currency or "").lower() != "eur" or st.amount_total != invoice["amount_ttc_cents"] or (st.metadata or {}).get("invoice_id") != invoice["id"]:
+        logger.error("Stripe session %s does not match invoice %s", invoice["provider_payment_id"], invoice["id"])
         await audit("billing.mismatch", org_id=invoice["org_id"], outcome="deny", resource_type="invoice",
-                    resource_id=invoice["id"], actor="mollie", details={"payment_id": payment.get("id")})
+                    resource_id=invoice["id"], actor="stripe", details={"session_id": invoice["provider_payment_id"]})
         return invoice
-    status = payment.get("status")
-    if status == "paid":
+    if st.payment_status == "paid":
         return await apply_paid(invoice)
-    if status in FINAL_FAILED:
+    if st.status == "expired":
         updated = await db.invoices.find_one_and_update(
-            {"id": invoice["id"], "status": "pending"}, {"$set": {"status": FINAL_FAILED[status]}},
+            {"id": invoice["id"], "status": "pending"}, {"$set": {"status": "expired"}},
             projection={"_id": 0}, return_document=ReturnDocument.AFTER)
-        await audit(f"billing.payment_{status}", org_id=invoice["org_id"], resource_type="invoice",
-                    resource_id=invoice["id"], actor="mollie")
+        await audit("billing.payment_expired", org_id=invoice["org_id"], resource_type="invoice", resource_id=invoice["id"], actor="stripe")
         return updated or invoice
-    return invoice  # open / pending / authorized: nothing to do yet
+    return invoice  # open / unpaid: customer still on the Stripe page
 
 
 async def apply_paid(invoice: dict) -> dict:
@@ -231,7 +212,7 @@ async def apply_paid(invoice: dict) -> dict:
                          "current_period_end": end, "granted_by_admin": False, "updated_at": now},
     }})
     await audit("billing.payment_paid", org_id=invoice["org_id"], resource_type="invoice", resource_id=invoice["id"],
-                actor="mollie", details={"number": number, "amount_ttc_cents": invoice["amount_ttc_cents"], "period_end": end.isoformat()})
+                actor="stripe", details={"number": number, "amount_ttc_cents": invoice["amount_ttc_cents"], "period_end": end.isoformat()})
     return await db.invoices.find_one({"id": invoice["id"]}, {"_id": 0}) or claimed
 
 

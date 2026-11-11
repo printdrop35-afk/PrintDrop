@@ -49,11 +49,11 @@ Full architecture: /app/docs/ARCHITECTURE.md.
 - Public view lib/pricing.public_pricing hides inactive items & promo codes. Endpoints: PUT /api/shops/{id}/pricing (ids server-assigned), GET /api/shops/{id}/pricing/export (CSV TTC/HT), POST /api/shops/{id}/pricing/copy-from/{src} (same tenant only).
 - Example prices (new shops + untouched shops migrated): A4 0,10/0,50 · A3 0,25/1,00 · scan 0,20 · saisie 3,00/page · plastification A4 2,00 · reliure dès 2,00.
 
-## SaaS subscriptions (Mollie, manual renewal)
+## SaaS subscriptions (Stripe Checkout, manual renewal)
 - plans collection (starter 19 € HT/mois, pro 39 €, business 79 €; yearly ×10), editable by super-admin: PUT /api/admin/plans/{code}. Limits max_shops/max_staff enforced (402).
 - platform_settings (id=global): shop_vat_rate_bp, subscription_vat_rate_bp, trial_days 14, grace_days 7, seller identity for invoices. GET/PUT /api/admin/settings.
 - organizations.subscription {plan_code, period, status trialing|active|past_due|expired|canceled (effective status computed from dates), trial_ends_at, current_period_end, granted_by_admin}. Register → 14-day trial. Expired/canceled → portal stops accepting orders. Admin: PATCH /api/admin/organizations/{id}/subscription (grant = no invoice, audited).
-- Owner (billing:manage): GET /api/billing, POST /api/billing/checkout → invoice pending + Mollie payment (Idempotency-Key = invoice id) → redirect. POST /api/billing/mollie/webhook (form id) → status ALWAYS re-fetched from Mollie, amount/metadata checked, paid applied once (sequential number PD-YYYY-NNNNNN, period extended). GET /api/billing/invoices/{id} also re-syncs pending invoices. Without MOLLIE_API_KEY: checkout 503, nothing simulated.
+- Owner (billing:manage): GET /api/billing, POST /api/billing/checkout → invoice pending (recorded first) + Stripe Checkout Session (EUR, TTC amount computed server-side, metadata invoice_id/org_id) → redirect; success/cancel return to /dashboard/abonnement?facture={id}. POST /api/webhook/stripe: body never trusted, only names a checkout.session id → status ALWAYS re-fetched from Stripe, amount/currency/metadata checked, paid applied once (sequential number PD-YYYY-NNNNNN, period extended); expired → invoice expired. GET /api/billing/invoices/{id} also re-syncs pending invoices. Key = STRIPE_API_KEY (sk_live_ → live, sk_test_ → test). Without it: checkout 503, nothing simulated. Mollie removed.
 - Cron subscriptions-sweep 08:00 Paris (.emergent/crons.yml) → persists statuses + reminder e-mails (J-3, expiry).
 - Migrations: backend/migrations/runner.py (001_pricing_v2, 002_subscriptions), auto at startup, `python -m migrations.runner`. Demo orgs: subscription granted_by_admin until +1 year (seed).
 

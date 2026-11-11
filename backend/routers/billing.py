@@ -1,17 +1,18 @@
-"""Owner billing (plans, Mollie checkout, invoices), the Mollie webhook, the renewal cron and the
+"""Owner billing (plans, Stripe checkout, invoices), the Stripe webhook, the renewal cron and the
 super-admin plan / settings / subscription management."""
 
 import asyncio
 import hmac
+import json
 import os
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, Form, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pymongo.errors import DuplicateKeyError
 
 from lib.authz import Principal, audit, now_utc, request_origin, require_platform, require_tenant
 from lib.billing import (
-    create_checkout, get_plan, payment_mode, plan_out, subscription_view, sweep_subscriptions, sync_invoice_from_mollie,
+    create_checkout, get_plan, payment_mode, plan_out, subscription_view, sweep_subscriptions, sync_invoice_from_stripe,
 )
 from lib.db import db
 from lib.platform import get_settings
@@ -64,19 +65,28 @@ async def invoice(invoice_id: str, p: Principal = Depends(require_tenant("billin
     if not inv:
         raise HTTPException(status_code=404, detail="Facture introuvable")
     if inv["status"] == "pending" and payment_mode() != "none":
-        try:  # webhook may be delayed: ask Mollie directly (server-side, authoritative)
-            inv = await sync_invoice_from_mollie(inv)
+        try:  # webhook may be delayed: ask Stripe directly (server-side, authoritative)
+            inv = await sync_invoice_from_stripe(inv)
         except HTTPException:
             pass
     return InvoiceOut(**{k: v for k, v in inv.items() if k not in ("checkout_url", "provider_payment_id")})
 
 
-@router.post("/billing/mollie/webhook")
-async def mollie_webhook(id: str = Form(default="", max_length=64)):
-    """Mollie posts only a payment id; the status is always re-fetched from Mollie's API."""
-    inv = await db.invoices.find_one({"provider_payment_id": id}, {"_id": 0}) if id else None
+@router.post("/webhook/stripe")
+async def stripe_webhook(request: Request):
+    """The event body is never trusted: it only names a session, whose status is re-fetched from Stripe."""
+    try:
+        event = json.loads(await request.body())
+        obj = (event.get("data") or {}).get("object") or {}
+        session_id = obj.get("id") if str(event.get("type", "")).startswith("checkout.session.") else None
+    except (ValueError, AttributeError):
+        session_id = None
+    inv = await db.invoices.find_one({"provider_payment_id": session_id}, {"_id": 0}) if isinstance(session_id, str) and session_id else None
     if inv and payment_mode() != "none":
-        await sync_invoice_from_mollie(inv)
+        try:
+            await sync_invoice_from_stripe(inv)
+        except HTTPException:
+            pass
     return {"ok": True}  # 200 for unknown ids too: reveals nothing, stops retries
 
 
@@ -116,7 +126,7 @@ async def admin_update_plan(code: str, body: PlanIn, p: Principal = Depends(requ
 
 @router.get("/admin/settings", response_model=PlatformSettingsOut)
 async def admin_settings(_: Principal = Depends(require_platform("platform:read"))):
-    return PlatformSettingsOut(**await get_settings(), payment_provider="Mollie",
+    return PlatformSettingsOut(**await get_settings(), payment_provider="Stripe",
                                payment_configured=payment_mode() != "none", payment_mode=payment_mode())  # type: ignore[arg-type]
 
 

@@ -50,7 +50,7 @@ export default function InvoicePage() {
             <div className="flex justify-between"><dt>TVA {formatVat(inv.vat_rate_bp)}</dt><dd className="font-mono">{formatEUR(inv.vat_cents)}</dd></div>
             <div className="flex justify-between border-t pt-1 text-base font-bold"><dt>Total TTC</dt><dd className="font-mono" data-testid="invoice-total-ttc">{formatEUR(inv.amount_ttc_cents)}</dd></div>
           </dl>
-          <p className="mt-8 text-xs text-muted-foreground">Statut : {tk("invoice", inv.status)} · Paiement par carte via Mollie{inv.paid_at ? ` le ${formatDate(inv.paid_at)}` : ""}.</p>
+          <p className="mt-8 text-xs text-muted-foreground">Statut : {tk("invoice", inv.status)} · Paiement par carte via Stripe{inv.paid_at ? ` le ${formatDate(inv.paid_at)}` : ""}.</p>
         </article>
       )}
     </div>
