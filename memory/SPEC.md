@@ -199,3 +199,15 @@ backend/tests/test_stage1.py — auth, pricing, upload validation, token binding
 - PoweredBy line on /s/<slug> and /suivi → /inscription?ref=portal.
 - Plausible (lib/analytics.ts) loads only if plausibleDomain set; events: Signup CTA, Demo Request, WhatsApp Click, Signup Completed.
 - public/robots.txt, public/sitemap.xml.
+
+## ProDocOnline-style AI documents (customer portal)
+- /s/<slug>: two choices — « Imprimer un document existant » (unchanged upload) or « Créer un document avec l'IA » (AiDocCreator dialog).
+- 12 templates (lib/ai_docs.py, names mirror ProDocOnline): CV professionnel, Lettre de motivation, Lettre de démission, Lettre administrative, Facture, Devis, Lettre commerciale, Proposition commerciale, Business plan, Lettre de réclamation, Attestation simple, Contrat simple. Link to full catalogue https://prodoconline.com/documents.
+- GET /api/public/shops/{slug}/ai-docs/templates; POST .../generate {template, values} → {title, body} (Claude claude-sonnet-5-5 via EMERGENT_LLM_KEY, 15/IP/hour, never invents facts → "[à compléter]"); POST .../finalize {template,title,body} → reportlab A4 PDF stored as a normal uploaded document of THAT shop (source=ai) → DocumentUploadOut; portal adds it to the cart (same shop/QR session, pricing, printers, payment). Free for customers.
+## Plans = PRINTER 1 / 3 / 10
+- Plan limit (stored field max_shops, value 1/3/10) now counts ENABLED printers of the org (enforced on printer connect + plan checkout 409); shop creation no longer limited. Features relabelled by migration 004. printer_label → "PRINTER n" shown on tracking (OrderPublicOut.printer_plan), dashboard order sheet (OrderOut.printer_plan || MeOut.printer_plan), super-admin.
+## Sessions
+- No expiry: JWT without exp + sv (users.session_version). Cookie max_age 400 days renewed on every /auth/me. Logout increments session_version (revokes all that user's sessions) and clears cookie.
+## Super-admin Agent profile
+- Agent = shop org (owner), Super Agent = super-admin. List shows agent name/company/email/phone/registration/status/PRINTER/docs/orders/payments/revenue; name links to /superadmin/agents/:orgId.
+- GET /api/admin/organizations/{id}/details (platform:read; every query scoped to org_id; audited platform.org_view): company info, shops, staff, documents, payments + summary (only counter payment records exist: failed/refunds = 0; pending = open unpaid orders), orders, customers (grouped from orders, no customer accounts), activity (audit_logs). POST /api/admin/organizations/{id}/documents/{doc}/link → 5-min signed link, doc must belong to that org (404 otherwise), audited platform.document_view.

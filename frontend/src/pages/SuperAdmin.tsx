@@ -1,4 +1,4 @@
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Building2, Euro, Loader2, LogOut, Receipt, Store, Users } from "lucide-react";
@@ -60,7 +60,7 @@ export default function SuperAdmin() {
       <main className="mx-auto max-w-7xl space-y-8 px-5 py-8 sm:px-8">
         <div>
           <h1 className="text-3xl font-bold text-ink">Administration de la plateforme</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Vue agrégée uniquement : le super-admin n'a pas accès aux documents ni aux données clients des boutiques.</p>
+          <p className="mt-2 text-sm text-muted-foreground">Cliquez sur le nom d'un Agent pour ouvrir sa fiche (entreprise, documents, paiements, commandes, clients, activité). Chaque consultation est tracée.</p>
         </div>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
           {kpis.map((k) => (
@@ -76,13 +76,20 @@ export default function SuperAdmin() {
           <div className="border-b p-5"><h2 className="text-lg font-semibold text-ink">Entreprises clientes</h2>
             <p className="text-xs text-muted-foreground">Abonnement : offre et statut. « Offrir » prolonge sans paiement ni facture (tracé dans le journal).</p></div>
           <Table data-testid="admin-orgs-table">
-            <TableHeader><TableRow><TableHead>Entreprise</TableHead><TableHead className="hidden md:table-cell">Boutiques</TableHead><TableHead className="hidden md:table-cell">Commandes</TableHead><TableHead className="hidden sm:table-cell">Encaissé</TableHead><TableHead>Abonnement</TableHead><TableHead>Compte</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Agent · Entreprise</TableHead><TableHead className="hidden lg:table-cell">Téléphone</TableHead><TableHead className="hidden md:table-cell">Formule</TableHead><TableHead className="hidden md:table-cell">Documents</TableHead><TableHead className="hidden md:table-cell">Commandes</TableHead><TableHead className="hidden md:table-cell">Paiements</TableHead><TableHead className="hidden sm:table-cell">Encaissé</TableHead><TableHead>Abonnement</TableHead><TableHead>Compte</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
             <TableBody>
               {rows.map((o) => (
                 <TableRow key={o.id} data-testid={`admin-org-row-${o.owner_email}`}>
-                  <TableCell><p className="font-medium text-ink">{o.name}</p><p className="text-xs text-muted-foreground">{o.owner_email} · {formatDateTime(o.created_at)}</p></TableCell>
-                  <TableCell className="hidden md:table-cell">{o.shops_count}</TableCell>
+                  <TableCell>
+                    <Link to={`/superadmin/agents/${o.id}`} className="font-medium text-azure hover:underline" data-testid={`admin-agent-link-${o.owner_email}`}>{o.owner_name || o.owner_email}</Link>
+                    <p className="text-sm text-ink">{o.name}</p>
+                    <p className="text-xs text-muted-foreground">{o.owner_email} · inscrit le {formatDateTime(o.created_at)}</p>
+                  </TableCell>
+                  <TableCell className="hidden text-xs lg:table-cell">{o.owner_phone || "—"}</TableCell>
+                  <TableCell className="hidden text-xs font-semibold md:table-cell">{o.printer_plan || "—"}</TableCell>
+                  <TableCell className="hidden md:table-cell">{o.documents_count}</TableCell>
                   <TableCell className="hidden md:table-cell">{o.orders_count}</TableCell>
+                  <TableCell className="hidden md:table-cell">{o.payments_count}</TableCell>
                   <TableCell className="hidden font-mono sm:table-cell">{formatEUR(o.revenue_cents)}</TableCell>
                   <TableCell>
                     <SubscriptionCell org={o} />

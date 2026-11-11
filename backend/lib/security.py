@@ -12,7 +12,9 @@ import jwt
 
 JWT_SECRET = os.environ["JWT_SECRET"]
 JWT_ALG = "HS256"
-SESSION_HOURS = 12
+# Sessions last until explicit logout (no time limit, user's choice). The browser cookie is renewed on use;
+# logout bumps users.session_version, which revokes every token issued before it.
+COOKIE_MAX_AGE = 400 * 24 * 3600  # browsers cap cookie lifetime at 400 days; renewed on each /auth/me
 COOKIE_NAME = "pd_session"
 
 
@@ -27,20 +29,20 @@ def verify_password(password: str, hashed: str) -> bool:
         return False
 
 
-def create_session_token(user_id: str) -> str:
-    now = datetime.now(timezone.utc)
-    payload = {"sub": user_id, "iat": now, "exp": now + timedelta(hours=SESSION_HOURS), "typ": "session"}
+def create_session_token(user_id: str, session_version: int = 0) -> str:
+    payload = {"sub": user_id, "iat": datetime.now(timezone.utc), "typ": "session", "sv": session_version}
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
 
 
-def decode_session_token(token: str) -> str | None:
+def decode_session_token(token: str) -> tuple[str, int] | None:
+    """(user_id, session_version) — the version must still match the user's to be valid."""
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
     except jwt.PyJWTError:
         return None
-    if payload.get("typ") != "session":
+    if payload.get("typ") != "session" or not payload.get("sub"):
         return None
-    return payload.get("sub")
+    return payload["sub"], int(payload.get("sv", 0))
 
 
 def new_secret_token() -> str:

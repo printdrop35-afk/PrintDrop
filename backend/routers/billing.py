@@ -43,6 +43,7 @@ async def overview(p: Principal = Depends(require_tenant("billing:manage"))):
         payment_configured=payment_mode() != "none", payment_mode=payment_mode(),  # type: ignore[arg-type]
         plans=[PlanOut(**pl) for pl in await all_plans(True)], invoices=[InvoiceOut(**i) for i in invoices],
         usage_shops=await db.shops.count_documents({"org_id": p.org_id}),
+        usage_printers=await db.printers.count_documents({"org_id": p.org_id, "enabled": True}),
         usage_staff=await db.memberships.count_documents({"org_id": p.org_id, "active": True}),
     )
 
@@ -54,8 +55,8 @@ async def checkout(body: CheckoutIn, request: Request, p: Principal = Depends(re
         raise HTTPException(status_code=404, detail="Offre introuvable")
     org = await db.organizations.find_one({"id": p.org_id}, {"_id": 0})
     assert org
-    if plan["max_shops"] < await db.shops.count_documents({"org_id": p.org_id}):
-        raise HTTPException(status_code=409, detail=f"L'offre {plan['name']} est limitée à {plan['max_shops']} boutique(s)")
+    if plan["max_shops"] < await db.printers.count_documents({"org_id": p.org_id, "enabled": True}):
+        raise HTTPException(status_code=409, detail=f"L'offre {plan['name']} est limitée à {plan['max_shops']} imprimante(s) (PRINTER {plan['max_shops']})")
     return await create_checkout(org, plan, body.period, request_origin(request), p)
 
 

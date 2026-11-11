@@ -6,6 +6,7 @@ import Register from "@/pages/Register";
 import CustomerPortal from "@/pages/CustomerPortal";
 import Tracking from "@/pages/Tracking";
 import SuperAdmin from "@/pages/SuperAdmin";
+import SuperAdminAgent from "@/pages/SuperAdminAgent";
 import Orders from "@/pages/dashboard/Orders";
 import Pricing from "@/pages/dashboard/Pricing";
 import ShopSettings from "@/pages/dashboard/ShopSettings";
@@ -40,6 +41,7 @@ export default function App() {
         <Route path="/suivi" element={<Tracking />} />
         <Route path="/suivi/:code" element={<Tracking />} />
         <Route path="/superadmin" element={<SuperAdmin />} />
+        <Route path="/superadmin/agents/:orgId" element={<SuperAdminAgent />} />
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<Orders />} />
           <Route path="tarifs" element={<Pricing />} />

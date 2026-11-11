@@ -47,7 +47,7 @@ export interface ShopOut {
 }
 export interface MeOut {
   user: UserOut; platform_role: string | null; org: OrgOut | null; role: TenantRole | null;
-  permissions: string[]; shops: ShopOut[];
+  permissions: string[]; shops: ShopOut[]; printer_plan: string;
 }
 export interface RegisterIn { org_name: string; shop_name: string; city: string; owner_name: string; email: string; password: string }
 export interface LoginIn { email: string; password: string }
@@ -77,7 +77,7 @@ export interface OrderPublicOut {
   code: string; shop_name: string; shop_slug: string; status: OrderStatus; payment_status: PaymentStatus;
   lines: QuoteLine[]; total_cents: number; total_ht_cents: number | null; vat_cents: number | null; vat_rate_bp: number | null;
   discount_cents: number; currency: string; created_at: string; history: StatusEvent[];
-  documents_deleted: boolean;
+  documents_deleted: boolean; printer_plan: string;
 }
 
 export interface DocumentHealthOut {
@@ -102,7 +102,7 @@ export interface OrderOut {
   customer_email: string | null; notify: boolean; note: string; lines: QuoteLine[]; total_cents: number;
   total_ht_cents: number | null; vat_cents: number | null; vat_rate_bp: number | null; discount_cents: number; currency: string; status: OrderStatus;
   payment_status: PaymentStatus; payment_method: string | null; paid_at: string | null;
-  created_at: string; updated_at: string; history: StatusEvent[]; purged_at?: string | null; copy_job?: CopyJobOut | null;
+  created_at: string; updated_at: string; history: StatusEvent[]; purged_at?: string | null; copy_job?: CopyJobOut | null; printer_plan?: string;
 }
 export interface OrderStatusIn { status: OrderStatus ; confirm_code?: string }
 export interface OrderPayIn { method: "cash" | "card_terminal" }
@@ -123,8 +123,36 @@ export interface AuditOut {
 export interface AdminStatsOut { organizations: number; active_organizations: number; shops: number; users: number; orders: number; revenue_cents: number }
 export interface AdminOrgOut {
   id: string; name: string; status: "active" | "suspended"; plan: string; subscription: SubscriptionOut | null; owner_email: string;
-  shops_count: number; orders_count: number; revenue_cents: number; created_at: string;
+  owner_name: string; owner_phone: string; printer_plan: string;
+  shops_count: number; orders_count: number; documents_count: number; payments_count: number; revenue_cents: number; created_at: string;
 }
+export interface AdminShopRow { id: string; name: string; city: string; address: string; slug: string; created_at: string }
+export interface AdminStaffRow { name: string; email: string; role: string; active: boolean }
+export interface AdminDocRow {
+  id: string; filename: string; kind: string; source: "upload" | "ai" | "scan"; customer: string; created_at: string;
+  order_code: string | null; printer_plan: string; status: string; viewable: boolean;
+}
+export interface AdminPaymentRow {
+  id: string; reference: string; customer: string; created_at: string; amount_cents: number; method: string; status: "succeeded";
+  order_code: string | null; printer_plan: string;
+}
+export interface AdminPaymentSummary { total: number; succeeded: number; pending: number; failed: number; refunds: number; revenue_cents: number }
+export interface AdminOrderRow {
+  id: string; code: string; customer: string; documents: string[]; printer_plan: string; created_at: string; total_cents: number;
+  payment_status: PaymentStatus; status: OrderStatus; completed_at: string | null;
+}
+export interface AdminCustomerRow { name: string; email: string; phone: string; first_order_at: string; orders_count: number; total_cents: number; order_codes: string[] }
+export interface AdminOrgDetailOut {
+  org: AdminOrgOut; shops: AdminShopRow[]; staff: AdminStaffRow[]; documents: AdminDocRow[]; payments: AdminPaymentRow[];
+  payment_summary: AdminPaymentSummary; orders: AdminOrderRow[]; customers: AdminCustomerRow[]; activity: AuditOut[];
+}
+export interface AdminDocLinkOut { url: string }
+export interface AiDocField { key: string; label: string; required: boolean; multiline: boolean; placeholder: string }
+export interface AiDocTemplateOut { code: string; name: string; category: string; fields: AiDocField[] }
+export interface AiDocCatalogOut { templates: AiDocTemplateOut[]; catalogue_url: string }
+export interface AiDocGenerateIn { template: string; values: Record<string, string> }
+export interface AiDocDraftOut { title: string; body: string }
+export interface AiDocFinalizeIn { template: string; title: string; body: string }
 export interface AdminOrgUpdateIn { status?: "active" | "suspended" }
 
 export interface NotificationOut {
@@ -211,7 +239,7 @@ export interface InvoiceOut {
 }
 export interface BillingOverviewOut {
   subscription: SubscriptionOut; payment_configured: boolean; payment_mode: "test" | "live" | "none"; plans: PlanOut[];
-  invoices: InvoiceOut[]; usage_shops: number; usage_staff: number;
+  invoices: InvoiceOut[]; usage_shops: number; usage_printers: number; usage_staff: number;
 }
 export interface AdminSubscriptionIn { plan_code?: string; period?: BillingPeriod; status?: "trialing" | "active" | "canceled"; period_end?: string }
 

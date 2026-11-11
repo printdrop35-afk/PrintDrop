@@ -150,7 +150,7 @@ def test_billing_overview_and_no_simulated_payment():
     assert codes["business"]["prices_ttc"]["monthly"] == 7900 + 1580
     if not ov["payment_configured"]:
         r = owner.post("/billing/checkout", json={"plan_code": "starter", "period": "monthly"})
-        assert r.status_code == 503
+        assert r.status_code in (409, 503)  # 409 = more connected printers than the plan's PRINTER limit
         assert all(i["status"] != "paid" for i in owner.get("/billing").json()["invoices"])
     owner.close()
 
@@ -205,7 +205,8 @@ def test_register_starts_trial_and_plan_limit():
     assert sub["status"] == "trialing" and sub["days_left"] >= 13
     admin = login("printdrop35@gmail.com", "Admin2026!")
     admin.patch(f"/admin/organizations/{r.json()['org']['id']}/subscription", json={"plan_code": "starter"})
-    assert c.post("/shops", json={"name": "Deuxième", "city": "Nantes"}).status_code == 402
+    # plans now limit PRINTERS (PRINTER 1/3/10), no longer shops: a second shop is allowed
+    assert c.post("/shops", json={"name": "Deuxième", "city": "Nantes"}).status_code == 200
     c.close()
     admin.close()
 

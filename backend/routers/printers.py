@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from lib.agent_release import get_release
 from lib.authz import Principal, audit, now_utc, require_tenant, tenant_repo
+from lib.billing import enforce_limit
 from lib.db import db
 from lib.printing import ACTIVE_JOB_STATUSES, check_printer, enqueue_initial_jobs, is_online, pick_printer, shop_printers
 from models.schemas import (
@@ -89,6 +90,8 @@ async def connect_printer(shop_id: str, body: ConnectPrinterIn, p: Principal = D
         await asyncio.sleep(1.5)
     if not pr:
         raise HTTPException(status_code=404, detail="Windows n'a pas encore signalé cette imprimante — patientez quelques secondes puis réessayez")
+    if not pr.get("enabled"):
+        await enforce_limit(p.org_id or "", "printers")
     await repo.update_one("printers", {"id": pr["id"]}, {"$set": {"enabled": True, "verified_at": None}})
     if not await repo.count("printers", {"shop_id": shop_id, "is_default": True, "enabled": True}):
         await repo.update_one("printers", {"id": pr["id"]}, {"$set": {"is_default": True}})

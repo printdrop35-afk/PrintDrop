@@ -73,6 +73,7 @@ export default function Tracking() {
                   <p className="font-mono text-2xl font-bold text-ink" data-testid="track-order-code">{order.code}</p>
                   <p className="text-sm text-muted-foreground">
                     <Link to={`/s/${order.shop_slug}`} className="hover:underline">{order.shop_name}</Link> · {formatDateTime(order.created_at)}
+                    {order.printer_plan && <> · <span className="font-semibold text-azure" data-testid="track-printer-plan">{order.printer_plan}</span></>}
                   </p>
                 </div>
                 <StatusBadge status={order.status} testId="track-status-badge" />

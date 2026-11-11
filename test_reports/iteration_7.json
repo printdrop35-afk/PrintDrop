@@ -1,0 +1,80 @@
+{
+  "passed": 13,
+  "failed": 0,
+  "bugs": [],
+  "action_items": [],
+  "retest_needed": false,
+  "checks": [
+    {
+      "criterion": "Customer portal keeps existing print option and adds AI option",
+      "name": "customer-portal-ai-catalog",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "/s/cybercafe-bastille: upload-dropzone visible unchanged; portal-choice-ai opens aidoc-dialog with exactly 12 [data-testid^=aidoc-template-] buttons grouped under 'Documents personnels/professionnels/administratifs'; aidoc-catalogue-link href=https://prodoconline.com/documents."
+    },
+    {
+      "criterion": "Customer portal keeps existing print option and adds AI option",
+      "name": "preview-printer-plan-and-ai-portal",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-verified on the public preview ingress (https://print-drop-6--08uafkjn.preview.emergentagent.com/s/cybercafe-bastille): upload-dropzone + portal-choice-ai visible, aidoc-dialog shows 12 templates, and GET /api/public/plans pro.features[0]=='PRINTER 3'."
+    },
+    {
+      "criterion": "AI generation, edit, preview, approve -> PDF transferred into same order",
+      "name": "aidoc-generate-to-order-and-track",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Picked 'certificate' template, filled 4 required fields, clicked Générer -> real LLM call (~15-20s) produced non-empty title/body in aidoc-step-edit with aidoc-preview visible; clicked « Imprimer avec PrintDrop » -> aidoc-dialog closed and doc-card-0 ('Attestation simple.pdf') appeared in the SAME shop cart with a non-zero quote total; submitted the order via the normal customer-name/phone + submit-order-button flow; /suivi/<code> shows track-printer-plan=='PRINTER 3'; owner dashboard order-scan lookup of the same code opened order-detail-sheet with order-detail-code matching and order-detail-printer-plan=='PRINTER 3'. Used exactly 1 of the budgeted 2-3 LLM generations."
+    },
+    {
+      "criterion": "AI endpoints validation",
+      "name": "tests/test_tscheck_ai_docs_validation.py (4 tests)",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "pytest -> 4 passed. GET templates returns 12 templates across the 3 expected categories + catalogue_url; POST finalize with an unknown template code -> 404 'Modèle introuvable'; POST generate for 'cv' with empty values -> 422 'Champ requis : ...' (no LLM call made, validation runs first); POST finalize for 'certificate' -> 200 DocumentUploadOut (pdf, page_count>=1, id+upload_token), then that id/token used as a /quote item -> 200 with a line referencing the same document_id and total_cents>0."
+    },
+    {
+      "criterion": "Plans show PRINTER 1/3/10",
+      "name": "tests/test_tscheck_printer_plans.py (2 tests)",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "pytest -> 2 passed. GET /api/public/plans: starter.features[0]=='PRINTER 1' (1900/19000), pro.features[0]=='PRINTER 3' (3900/39000), business.features[0]=='PRINTER 10' (7900/79000) — prices unchanged; logged in as proprio@bastille.fr, GET /auth/me -> printer_plan=='PRINTER 3' and shops includes cybercafe-bastille."
+    },
+    {
+      "criterion": "Plans show PRINTER 1/3/10",
+      "name": "aidoc-generate-to-order-and-track",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Covered by the same flow above: /suivi/<code> track-printer-plan and dashboard order-detail-printer-plan both read 'PRINTER 3' for a live Bastille order."
+    },
+    {
+      "criterion": "Persistent login + explicit logout",
+      "name": "persistent-login-session-and-logout",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Owner: login -> /dashboard, full page reload stays on /dashboard with orders-table/orders-empty visible (no re-login), logout-button click -> 'Connexion' heading, then direct goto('/dashboard') redirects to /login. Repeated for super-admin: reload stays on /superadmin with admin-orgs-table visible, admin-logout-button -> /login, goto('/superadmin') redirects to /login. The two expected 401s on GET /api/auth/me right after each logout are the console errors reported below, which is the correct post-logout behaviour, not a bug."
+    },
+    {
+      "criterion": "Persistent login + explicit logout",
+      "name": "tests/test_tscheck_persistent_login_logout.py (2 tests)",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "pytest -> 2 passed (using a fresh tscheck-<uuid> registered account, not a shared seeded one, to avoid logout's all-sessions revocation racing other parallel test files on the same seeded owner). Login Set-Cookie has Max-Age > 300 days (~400-day cookie per spec_deviations); GET /auth/me re-issues/renews the cookie; after POST /auth/logout, replaying the pre-logout cookie value in a brand-new client -> GET /auth/me returns 401."
+    },
+    {
+      "criterion": "Super-admin Agent list and profile",
+      "name": "superadmin-agent-profile-tabs",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "/superadmin shows admin-orgs-table; navigated directly to /superadmin/agents/d19437ef-cf22-4318-bbb8-e243a95f4316 (Bastille is beyond page 1 of >1000 orgs per seed_facts) -> agent-name='Camille Martin', agent-company='CyberCafé Bastille SARL', agent-company-info shows address/SIRET/created/'Active · PRINTER 3'; all 5 tabs (Documents/Paiements/Commandes/Clients/Activité) visible and switchable; clicking a document's 'Voir' button fires POST .../documents/{id}/link which returns url matching ^/api/files/ (the signed PDF link)."
+    },
+    {
+      "criterion": "Strict Agent data isolation",
+      "name": "tests/test_tscheck_data_isolation.py (2 tests)",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "pytest -> 2 passed. Owner A (Bastille) GET /shops/{Owner-B-shop-id}/orders -> 404; Owner A GET /admin/organizations/{Owner-B-org-id}/details -> 403. Super-admin's /admin/organizations/{org-B}/details documents/orders ids are fully disjoint from org A's; POST /admin/organizations/{org-B}/documents/{an org-A doc id}/link -> 404 (link is scoped by org_id, not just doc_id). Fixed a flaky first run: both tests originally called /auth/logout on the shared seeded Owner A/B accounts, which (per spec_deviations, logout revokes ALL sessions of that account) raced with other test files/xdist workers logged in as the same accounts and caused a transient 401; removed those unnecessary logout calls (the test's own httpx.Client is discarded at the end of the `with` block regardless) and reran clean twice."
+    }
+  ],
+  "notes": "Fresh briefing (AI document generator in the customer portal, PRINTER-slot plan labels, persistent sessions/explicit logout, super-admin Agent profile, and strict per-org data isolation) distinct from iteration_6's marketing-homepage topic. 7 acceptance_matrix criteria, each requiring browser and/or backend artifacts per the API-backed-UI-criterion rule => 13 checks[] entries. Added 4 backend test files (test_tscheck_ai_docs_validation.py, test_tscheck_printer_plans.py, test_tscheck_persistent_login_logout.py, test_tscheck_data_isolation.py) and 4 new browser checks (customer-portal-ai-catalog, aidoc-generate-to-order-and-track, superadmin-agent-profile-tabs, persistent-login-session-and-logout) plus one public-preview-ingress pass (preview-printer-plan-and-ai-portal). Full backend suite: 88 tests, 87 passed, 1 failed (tests/test_stage1.py::test_superadmin_scope — the pre-existing, already-documented >1000-orgs issue called out in the briefing as unrelated). Used exactly 1 of the budgeted 2-3 real-LLM AI-doc generations (seed_facts: 15/IP/hour rate limit). No application bugs found. Fixture discipline: all AI-doc/order fixtures used tscheck-<prefix> customer/document names; the persistent-login-logout backend test registers its own fresh tscheck-<uuid> account rather than touching the shared seeded owner/super-admin credentials; the data-isolation and printer-plan backend tests read (never modify) the shared seeded Owner A/B/super-admin accounts and were adjusted to stop calling /auth/logout on them after diagnosing a genuine cross-test-file race (logout revokes all sessions of that account) — documented above as a flaky-then-fixed-at-the-test-level case, not an application bug."
+}

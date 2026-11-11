@@ -37,7 +37,7 @@ function PlanEditor({ plan }: { plan: PlanOut }) {
       <div className="grid grid-cols-2 gap-2 text-xs">
         <label>Mensuel HT (€)<Input value={d.monthly} placeholder="non proposé" onChange={(e) => setD({ ...d, monthly: e.target.value })} className="h-9 font-mono" data-testid={`admin-plan-monthly-${plan.code}`} /></label>
         <label>Annuel HT (€)<Input value={d.yearly} placeholder="non proposé" onChange={(e) => setD({ ...d, yearly: e.target.value })} className="h-9 font-mono" data-testid={`admin-plan-yearly-${plan.code}`} /></label>
-        <label>Boutiques max<Input inputMode="numeric" value={d.max_shops} onChange={(e) => setD({ ...d, max_shops: parseInt(e.target.value || "1", 10) })} className="h-9" /></label>
+        <label>Imprimantes max (PRINTER n)<Input inputMode="numeric" value={d.max_shops} onChange={(e) => setD({ ...d, max_shops: parseInt(e.target.value || "1", 10) })} className="h-9" /></label>
         <label>Comptes max<Input inputMode="numeric" value={d.max_staff} onChange={(e) => setD({ ...d, max_staff: parseInt(e.target.value || "1", 10) })} className="h-9" /></label>
       </div>
       <label className="block text-xs">Fonctionnalités (une par ligne)<Textarea value={d.feats} onChange={(e) => setD({ ...d, feats: e.target.value })} rows={4} className="text-xs" data-testid={`admin-plan-features-${plan.code}`} /></label>

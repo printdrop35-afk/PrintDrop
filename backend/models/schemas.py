@@ -144,6 +144,7 @@ class MeOut(BaseModel):
     role: TenantRole | None
     permissions: list[str]
     shops: list[ShopOut]
+    printer_plan: str = ""  # org's subscription formula, e.g. « PRINTER 3 »
 
 
 # ---------- shops ----------
@@ -300,6 +301,7 @@ class OrderPublicOut(BaseModel):
     created_at: datetime
     history: list[StatusEvent]
     documents_deleted: bool = False  # files erased (pickup / cancellation)
+    printer_plan: str = ""  # shop's subscription formula, e.g. « PRINTER 3 »
 
 
 # ---------- orders (dashboard) ----------
@@ -332,6 +334,7 @@ class OrderOut(BaseModel):
     history: list[StatusEvent]
     purged_at: datetime | None = None  # document files erased (pickup / cancellation); order data kept
     copy_job: "CopyJobOut | None" = None  # automatic photocopy (scan + print by the Windows agent)
+    printer_plan: str = ""  # subscription formula at order time (« PRINTER 3 »)
 
 
 class CopyJobOut(BaseModel):
@@ -454,8 +457,13 @@ class AdminOrgOut(BaseModel):
     plan: str
     subscription: SubscriptionOut | None = None
     owner_email: str
+    owner_name: str = ""
+    owner_phone: str = ""
+    printer_plan: str = ""
     shops_count: int
     orders_count: int
+    documents_count: int = 0
+    payments_count: int = 0
     revenue_cents: int
     created_at: datetime
 
@@ -968,6 +976,7 @@ class BillingOverviewOut(BaseModel):
     plans: list[PlanOut]
     invoices: list[InvoiceOut]
     usage_shops: int
+    usage_printers: int = 0
     usage_staff: int
 
 
@@ -1138,3 +1147,137 @@ class CashSummaryOut(BaseModel):
 OrderOut.model_rebuild()
 AgentOut.model_rebuild()
 AgentHeartbeatIn.model_rebuild()
+
+
+# ---------- AI documents (customer portal) ----------
+class AiDocField(BaseModel):
+    key: str
+    label: str
+    required: bool
+    multiline: bool
+    placeholder: str
+
+
+class AiDocTemplateOut(BaseModel):
+    code: str
+    name: str
+    category: str
+    fields: list[AiDocField]
+
+
+class AiDocCatalogOut(BaseModel):
+    templates: list[AiDocTemplateOut]
+    catalogue_url: str
+
+
+class AiDocGenerateIn(BaseModel):
+    template: str = Field(min_length=1, max_length=40)
+    values: dict[str, str] = Field(default_factory=dict, max_length=12)
+
+    @field_validator("values")
+    @classmethod
+    def _short(cls, v: dict[str, str]) -> dict[str, str]:
+        if any(len(x) > 3000 for x in v.values()):
+            raise ValueError("Texte trop long (3000 caractères max. par champ)")
+        return v
+
+
+class AiDocDraftOut(BaseModel):
+    title: str
+    body: str
+
+
+class AiDocFinalizeIn(BaseModel):
+    template: str = Field(min_length=1, max_length=40)
+    title: str = Field(default="", max_length=150)
+    body: str = Field(min_length=10, max_length=20000)
+
+
+# ---------- super-admin: one Agent (organization) in detail ----------
+class AdminShopRow(BaseModel):
+    id: str
+    name: str
+    city: str
+    address: str = ""
+    slug: str
+    created_at: datetime
+
+
+class AdminStaffRow(BaseModel):
+    name: str
+    email: str
+    role: str
+    active: bool
+
+
+class AdminDocRow(BaseModel):
+    id: str
+    filename: str
+    kind: str
+    source: Literal["upload", "ai", "scan"]
+    customer: str
+    created_at: datetime
+    order_code: str | None
+    printer_plan: str
+    status: str
+    viewable: bool
+
+
+class AdminPaymentRow(BaseModel):
+    id: str
+    reference: str
+    customer: str
+    created_at: datetime
+    amount_cents: int
+    method: str
+    status: Literal["succeeded"]
+    order_code: str | None
+    printer_plan: str
+
+
+class AdminPaymentSummary(BaseModel):
+    total: int
+    succeeded: int
+    pending: int  # open orders still unpaid
+    failed: int
+    refunds: int
+    revenue_cents: int
+
+
+class AdminOrderRow(BaseModel):
+    id: str
+    code: str
+    customer: str
+    documents: list[str]
+    printer_plan: str
+    created_at: datetime
+    total_cents: int
+    payment_status: PaymentStatus
+    status: OrderStatus
+    completed_at: datetime | None
+
+
+class AdminCustomerRow(BaseModel):
+    name: str
+    email: str
+    phone: str
+    first_order_at: datetime
+    orders_count: int
+    total_cents: int
+    order_codes: list[str]
+
+
+class AdminOrgDetailOut(BaseModel):
+    org: AdminOrgOut
+    shops: list[AdminShopRow]
+    staff: list[AdminStaffRow]
+    documents: list[AdminDocRow]
+    payments: list[AdminPaymentRow]
+    payment_summary: AdminPaymentSummary
+    orders: list[AdminOrderRow]
+    customers: list[AdminCustomerRow]
+    activity: list[AuditOut]
+
+
+class AdminDocLinkOut(BaseModel):
+    url: str

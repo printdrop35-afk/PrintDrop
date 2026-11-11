@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Logo } from "@/components/Logo";
+import { AiDocCreator } from "@/components/AiDocCreator";
 import { apiGet, apiPost, apiUpload, errorMessage } from "@/lib/api";
 import { formatEUR, formatVat, tk } from "@/i18n";
 import { cn } from "@/lib/utils";
@@ -123,6 +124,7 @@ export default function CustomerPortal() {
   const fileInput = useRef<HTMLInputElement>(null);
   const [docs, setDocs] = useState<CartDoc[]>([]);
   const [uploading, setUploading] = useState(0);
+  const [aiOpen, setAiOpen] = useState(false);
   const [services, setServices] = useState<ServicesIn>({ photocopy_bw: 0, photocopy_color: 0, scan_pages: 0 });
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -230,12 +232,22 @@ export default function CustomerPortal() {
         )}
         {shop?.accepting_orders && (
           <>
+            <p className="text-sm font-semibold text-ink" data-testid="portal-choice-print">Imprimer un document existant</p>
             <button type="button" onClick={() => fileInput.current?.click()} data-testid="upload-dropzone"
               className="group flex w-full flex-col items-center rounded-2xl border-2 border-dashed border-slate-300 bg-white px-6 py-8 text-center shadow-sm transition-[border-color,box-shadow] hover:border-azure hover:shadow-md">
               {uploading > 0 ? <Loader2 className="size-9 animate-spin text-azure" /> : <UploadCloud className="size-9 text-azure transition-transform group-hover:-translate-y-0.5" />}
               <span className="mt-3 font-heading text-lg font-semibold text-ink">{uploading > 0 ? "Envoi en cours…" : "Ajouter des documents"}</span>
               <span className="mt-1 text-sm text-muted-foreground">PDF, Word, JPG ou PNG · 25 Mo max · fichiers privés</span>
             </button>
+            <p className="text-sm font-semibold text-ink">Ou</p>
+            <button type="button" onClick={() => setAiOpen(true)} data-testid="portal-choice-ai"
+              className="flex w-full items-center gap-4 rounded-2xl border bg-white px-5 py-4 text-left shadow-sm transition-[border-color,box-shadow] hover:border-azure hover:shadow-md">
+              <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-azure/10 text-azure"><Sparkles className="size-5" /></span>
+              <span><span className="block font-heading font-semibold text-ink">Créer un document avec l'IA</span>
+                <span className="text-sm text-muted-foreground">CV, lettre, facture, devis, contrat… gratuit, puis imprimé ici</span></span>
+            </button>
+            <AiDocCreator slug={slug} open={aiOpen} onOpenChange={setAiOpen}
+              onDone={(upload) => { setDocs((prev) => [...prev, { upload, options: { ...DEFAULT_OPTIONS, paper_size: sizes.includes("A4") ? "A4" : sizes[0] ?? "A4" } }]); toast.success(`${upload.filename} ajouté à votre commande`); }} />
             <input ref={fileInput} type="file" multiple accept="application/pdf,image/png,image/jpeg,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="hidden" onChange={onFiles} data-testid="upload-file-input" />
 
             {docs.map((d, i) => (

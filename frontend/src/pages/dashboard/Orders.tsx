@@ -16,6 +16,7 @@ import { PaperStockDialog, PaperStrip } from "@/components/PaperStock";
 import { useDashboard } from "@/hooks/useDashboard";
 import { apiGet, apiPost, errorMessage } from "@/lib/api";
 import { formatDateTime, formatEUR, tk } from "@/i18n";
+import { useMe } from "@/hooks/useMe";
 import type { OrderOut, OrderPayIn, OrderStatus, ShopStatsOut } from "@/lib/types";
 
 const FILTERS = [
@@ -63,6 +64,8 @@ function OrderSheet({ order, onClose, verifiedCode, onVerified }: { order: Order
   const [printReceipt, setPrintReceipt] = useState(false); // opens the print window once, right after pickup
   const live = useQuery({ queryKey: ["order", order?.id], queryFn: () => apiGet<OrderOut>(`/orders/${order?.id}`), enabled: !!order, initialData: order ?? undefined, refetchInterval: 5000 });
   const o = live.data ?? order;
+  const me = useMe();
+  const printerPlan = o?.printer_plan || me.data?.printer_plan || "";
 
   const status = useMutation({
     mutationFn: ({ to, confirm_code = "" }: { to: OrderStatus; confirm_code?: string }) => apiPost<OrderOut>(`/orders/${o?.id}/status`, { status: to, confirm_code }),
@@ -91,6 +94,7 @@ function OrderSheet({ order, onClose, verifiedCode, onVerified }: { order: Order
               <SheetDescription data-testid="order-detail-contact">
                 {o.customer_name || "Nom non renseigné"} · Tél. : {o.customer_phone || "Non renseigné"} · E-mail : {o.customer_email || "Non renseigné"} · {formatDateTime(o.created_at)}
               </SheetDescription>
+              {printerPlan && <span className="w-fit rounded-full bg-azure/10 px-2.5 py-0.5 text-xs font-semibold text-azure" data-testid="order-detail-printer-plan">{printerPlan}</span>}
             </SheetHeader>
             <div className="space-y-5 px-4 pb-8">
               <div className="flex flex-wrap gap-2"><StatusBadge status={o.status} testId="order-detail-status" /><PaymentBadge status={o.payment_status} testId="order-detail-payment" /></div>

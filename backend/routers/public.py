@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 from lib.authz import audit, now_utc, request_origin
 from lib.db import db
-from lib.billing import org_can_take_orders
+from lib.billing import org_can_take_orders, org_printer_label
 from lib.platform import shop_vat_bp
 from lib.pricing import finalize, price_extras, price_print, price_services, public_pricing
 from lib.security import new_secret_token, sha256, verify_file_link
@@ -154,6 +154,7 @@ async def create_order(slug: str, body: OrderCreateIn, request: Request):
         "discount_cents": q["discount_cents"], "promo_code": q["promo_code_applied"],
         "active_code": code, "status": "pending", "payment_status": "unpaid", "payment_method": None, "paid_at": None,
         "created_at": now, "updated_at": now, "history": [{"status": "pending", "at": now, "by": "Client"}],
+        "printer_plan": await org_printer_label(shop["org_id"]),
     }
     for attempt in range(5):  # the unique active_code index settles a race between two orders drawing the same code
         try:
@@ -177,6 +178,8 @@ async def track(body: TrackIn, request: Request):
     # orders placed with a phone still require it; orders without phone are tracked with the code alone
     if not order or (order.get("phone_digits") and not secrets.compare_digest(order["phone_digits"], phone_digits(body.phone))):
         raise HTTPException(status_code=404, detail="Aucune commande ne correspond à ce code (et à ce numéro, si vous en avez donné un)")
+    if not order.get("printer_plan"):
+        order["printer_plan"] = await org_printer_label(order["org_id"])
     return with_retention(order)
 
 

@@ -20,7 +20,7 @@ from lib.notify import check_agents_offline, process_notification_jobs
 from lib.printing import expire_stale_leases
 from migrations.runner import run_migrations
 from routers.counter import expire_copy_commands
-from routers import admin, agent, auth, billing, printers, dashboard, devices, public, reports, site, counter
+from routers import admin, agent, ai_docs, auth, billing, printers, dashboard, devices, public, reports, site, counter
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +88,7 @@ api_router.include_router(reports.router)
 api_router.include_router(billing.router)
 api_router.include_router(printers.router)
 api_router.include_router(site.router)
+api_router.include_router(ai_docs.router)
 api_router.include_router(counter.router)
 api_router.include_router(counter.public_router)
 

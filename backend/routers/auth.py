@@ -10,10 +10,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from lib.authz import ROLE_PERMS, PLATFORM_PERMS, Principal, TenantRepo, audit, get_principal, load_principal, now_utc
 from lib.db import db
-from lib.billing import subscription_view
+from lib.billing import subscription_view, org_printer_label
 from lib.platform import get_settings
 from lib.pricing import default_pricing
-from lib.security import COOKIE_NAME, SESSION_HOURS, create_session_token, hash_password, verify_password
+from lib.security import COOKIE_MAX_AGE, COOKIE_NAME, create_session_token, decode_session_token, hash_password, verify_password
 from models.schemas import LoginIn, MeOut, OrgOut, RegisterIn, ShopOut, UserOut
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -43,11 +43,12 @@ def new_shop_doc(org_id: str, name: str, city: str, address: str, slug: str) -> 
     }
 
 
-def set_session_cookie(request: Request, response: Response, user_id: str) -> None:
+async def set_session_cookie(request: Request, response: Response, user_id: str) -> None:
     secure = request.headers.get("x-forwarded-proto", request.url.scheme) == "https"
+    user = await db.users.find_one({"id": user_id}, {"_id": 0, "session_version": 1}) or {}
     response.set_cookie(
-        COOKIE_NAME, create_session_token(user_id), httponly=True, secure=secure,
-        samesite="lax", max_age=SESSION_HOURS * 3600, path="/",
+        COOKIE_NAME, create_session_token(user_id, user.get("session_version", 0)), httponly=True, secure=secure,
+        samesite="lax", max_age=COOKIE_MAX_AGE, path="/",
     )
 
 
@@ -65,6 +66,7 @@ async def build_me(p: Principal) -> MeOut:
     return MeOut(
         user=UserOut(id=p.user_id, email=p.email, name=p.name), platform_role=p.platform_role,
         org=org, role=p.tenant_role if org else None, permissions=sorted(perms), shops=shops,  # type: ignore[arg-type]
+        printer_plan=await org_printer_label(p.org_id) if org else "",
     )
 
 
@@ -94,7 +96,7 @@ async def register(body: RegisterIn, request: Request, response: Response):
     p = await load_principal(user_id)
     assert p
     await audit("org.register", principal=p, resource_type="organization", resource_id=org_id)
-    set_session_cookie(request, response, user_id)
+    await set_session_cookie(request, response, user_id)
     return await build_me(p)
 
 
@@ -113,16 +115,24 @@ async def login(body: LoginIn, request: Request, response: Response):
     p = await load_principal(user["id"])
     assert p
     await audit("auth.login", principal=p, resource_type="user", resource_id=p.user_id)
-    set_session_cookie(request, response, user["id"])
+    await set_session_cookie(request, response, user["id"])
     return await build_me(p)
 
 
 @router.post("/logout")
-async def logout(response: Response):
+async def logout(request: Request, response: Response):
+    """Explicit logout: revokes this account's session tokens server-side, then clears the cookie."""
+    token = request.cookies.get(COOKIE_NAME)
+    decoded = decode_session_token(token) if token else None
+    p = await load_principal(*decoded) if decoded else None
+    if p:
+        await db.users.update_one({"id": p.user_id}, {"$inc": {"session_version": 1}})
+        await audit("auth.logout", principal=p, resource_type="user", resource_id=p.user_id)
     response.delete_cookie(COOKIE_NAME, path="/")
     return {"ok": True}
 
 
 @router.get("/me", response_model=MeOut)
-async def me(p: Principal = Depends(get_principal)):
+async def me(request: Request, response: Response, p: Principal = Depends(get_principal)):
+    await set_session_cookie(request, response, p.user_id)  # sliding renewal: stays logged in until logout
     return await build_me(p)

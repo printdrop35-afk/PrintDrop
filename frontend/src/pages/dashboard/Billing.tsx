@@ -76,7 +76,7 @@ export default function Billing() {
               {sub.status === "expired" || sub.status === "canceled" ? "Vos boutiques n'acceptent plus de nouvelles commandes." : null}
             </p>
           </div>
-          <p className="text-sm text-muted-foreground">Utilisation : {data.usage_shops} boutique(s) · {data.usage_staff} compte(s)</p>
+          <p className="text-sm text-muted-foreground">Utilisation : {data.usage_printers} imprimante(s) connectée(s) · {data.usage_staff} compte(s)</p>
         </section>
       )}
 

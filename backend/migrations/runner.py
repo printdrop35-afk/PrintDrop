@@ -60,7 +60,14 @@ async def m003_pickup_codes() -> None:
                                  partialFilterExpression={"active_code": {"$exists": True}})
 
 
-MIGRATIONS = [("001_pricing_v2", m001_pricing_v2), ("002_subscriptions", m002_subscriptions), ("003_pickup_codes", m003_pickup_codes)]
+async def m004_plan_printers() -> None:
+    """Plans now count printers: relabel ONLY the three shop-count features (prices and limits untouched)."""
+    for old, new in (("1 boutique", "PRINTER 1"), ("Jusqu'à 3 boutiques", "PRINTER 3"), ("Jusqu'à 10 boutiques", "PRINTER 10")):
+        await db.plans.update_many({"features": old}, {"$set": {"features.$": new}})
+
+
+MIGRATIONS = [("001_pricing_v2", m001_pricing_v2), ("002_subscriptions", m002_subscriptions), ("003_pickup_codes", m003_pickup_codes),
+              ("004_plan_printers", m004_plan_printers)]
 
 
 async def run_migrations() -> list[str]:

@@ -24,13 +24,13 @@ LIVE_STATUSES = {"trialing", "active", "past_due"}
 DEFAULT_PLANS = [
     {"code": "starter", "name": "Starter", "description": "Pour un point de vente indépendant", "sort": 1,
      "prices_ht": {"monthly": 1900, "yearly": 19000}, "max_shops": 1, "max_staff": 3, "active": True,
-     "features": ["1 boutique", "3 comptes employés", "QR code & portail client", "Tarifs personnalisés", "Rapport quotidien par e-mail"]},
+     "features": ["PRINTER 1", "3 comptes employés", "QR code & portail client", "Tarifs personnalisés", "Rapport quotidien par e-mail"]},
     {"code": "pro", "name": "Professional", "description": "Pour les boutiques avec impression automatique", "sort": 2,
      "prices_ht": {"monthly": 3900, "yearly": 39000}, "max_shops": 3, "max_staff": 10, "active": True,
-     "features": ["Jusqu'à 3 boutiques", "10 comptes employés", "Agent d'impression Windows", "Alertes e-mail / SMS clients", "Alertes papier & imprimantes"]},
+     "features": ["PRINTER 3", "10 comptes employés", "Agent d'impression Windows", "Alertes e-mail / SMS clients", "Alertes papier & imprimantes"]},
     {"code": "business", "name": "Business", "description": "Pour les réseaux de boutiques", "sort": 3,
      "prices_ht": {"monthly": 7900, "yearly": 79000}, "max_shops": 10, "max_staff": 50, "active": True,
-     "features": ["Jusqu'à 10 boutiques", "50 comptes employés", "Tarifs différents par boutique", "Journal d'audit complet", "Support prioritaire"]},
+     "features": ["PRINTER 10", "50 comptes employés", "Tarifs différents par boutique", "Journal d'audit complet", "Support prioritaire"]},
 ]
 
 
@@ -95,12 +95,23 @@ async def enforce_limit(org_id: str, kind: str) -> None:
     plan = await get_plan(((org or {}).get("subscription") or {}).get("plan_code", "")) if org else None
     if not plan:
         return
-    if kind == "shops":
-        used, limit, label = await db.shops.count_documents({"org_id": org_id}), plan["max_shops"], "boutiques"
+    if kind == "printers":  # plans limit connected printers (PRINTER 1 / 3 / 10); stored in max_shops for compatibility
+        used, limit, label = await db.printers.count_documents({"org_id": org_id, "enabled": True}), plan["max_shops"], "imprimantes"
     else:
         used, limit, label = await db.memberships.count_documents({"org_id": org_id, "active": True}), plan["max_staff"], "comptes"
     if used >= limit:
         raise HTTPException(status_code=402, detail=f"Limite de l'offre {plan['name']} atteinte ({limit} {label}) — changez d'offre dans Abonnement")
+
+
+def printer_label(plan: dict | None) -> str:
+    return f"PRINTER {plan['max_shops']}" if plan else ""
+
+
+async def org_printer_label(org_id: str) -> str:
+    org = await db.organizations.find_one({"id": org_id}, {"_id": 0, "subscription": 1, "plan": 1})
+    if not org:
+        return ""
+    return printer_label(await get_plan(((org.get("subscription") or {}).get("plan_code")) or org.get("plan", "")))
 
 
 def plan_out(plan: dict, vat_bp: int) -> dict:

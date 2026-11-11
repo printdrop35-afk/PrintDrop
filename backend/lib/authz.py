@@ -74,9 +74,9 @@ async def audit(
     })
 
 
-async def load_principal(user_id: str) -> Principal | None:
+async def load_principal(user_id: str, session_version: int | None = None) -> Principal | None:
     user = await db.users.find_one({"id": user_id, "active": True}, {"_id": 0})
-    if not user:
+    if not user or (session_version is not None and user.get("session_version", 0) != session_version):
         return None
     p = Principal(user_id=user["id"], email=user["email"], name=user["name"], platform_role=user.get("platform_role"))
     membership = await db.memberships.find_one({"user_id": user["id"], "active": True}, {"_id": 0})
@@ -91,8 +91,8 @@ async def load_principal(user_id: str) -> Principal | None:
 
 async def get_principal(request: Request) -> Principal:
     token = request.cookies.get(COOKIE_NAME)
-    user_id = decode_session_token(token) if token else None
-    principal = await load_principal(user_id) if user_id else None
+    decoded = decode_session_token(token) if token else None
+    principal = await load_principal(*decoded) if decoded else None
     if not principal:
         raise HTTPException(status_code=401, detail="Authentification requise")
     return principal

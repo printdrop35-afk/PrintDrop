@@ -63,7 +63,6 @@ async def list_shops(p: Principal = Depends(require_tenant("shop:read"))):
 
 @router.post("/shops", response_model=ShopOut)
 async def create_shop(body: ShopCreateIn, p: Principal = Depends(require_tenant("shop:create"))):
-    await enforce_limit(p.org_id or "", "shops")
     repo = tenant_repo(p)
     doc = new_shop_doc(p.org_id or "", body.name.strip(), body.city.strip(), body.address.strip(), await unique_slug(body.name))
     doc = await repo.insert("shops", doc)
