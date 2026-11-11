@@ -31,9 +31,15 @@ import threading
 import time
 from pathlib import Path
 
+# The installed app runs on Python's embeddable distribution, whose python312._pth file fixes sys.path and does NOT add
+# this script's folder: printdrop_gui.py (next to this file) was not importable => pythonw.exe died silently (v0.5.0).
+_APP_DIR = str(Path(__file__).resolve().parent)
+if _APP_DIR not in sys.path:
+    sys.path.insert(0, _APP_DIR)
+
 import requests
 
-VERSION = "0.5.0"
+VERSION = "0.5.1"
 IS_WINDOWS = sys.platform == "win32"
 DEFAULT_SERVER = os.environ.get("PRINTDROP_SERVER", "https://printdrop.fr")
 DATA_DIR = Path(os.environ.get("PRINTDROP_AGENT_DIR") or (
@@ -913,5 +919,32 @@ def main() -> None:
         Agent(Api(cfg["server"], unprotect(cfg["key"])), make_backend(args.dry_run, args.sumatra)).run(once=args.once)
 
 
+def _report_crash(exc: BaseException) -> None:
+    """pythonw.exe has no console: an unhandled error would close PrintDrop without a word. Write it down and say it."""
+    import traceback
+    text = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        (DATA_DIR / "crash.log").write_text(f"PrintDrop {VERSION} — {time.strftime('%Y-%m-%d %H:%M:%S')}\n{text}", encoding="utf-8")
+    except OSError:
+        pass
+    msg = (f"PrintDrop n'a pas pu démarrer.\n\n{exc.__class__.__name__} : {exc}\n\n"
+           f"Le détail est enregistré dans :\n{DATA_DIR / 'crash.log'}\n\nEnvoyez ce fichier au support PrintDrop.")
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(None, msg, "PrintDrop", 0x10)
+            return
+        except Exception:  # noqa: BLE001
+            pass
+    sys.stderr and sys.stderr.write(msg + "\n")
+
+
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except SystemExit:
+        raise
+    except BaseException as _exc:  # noqa: BLE001
+        _report_crash(_exc)
+        raise SystemExit(1)

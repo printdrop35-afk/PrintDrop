@@ -69,7 +69,8 @@ async def build_quote(shop: dict, body: QuoteIn) -> dict:
 async def tracking_config():
     """Google Ads conversion target (set in backend/.env); empty = no conversion event is sent."""
     import os
-    return TrackingConfigOut(ads_purchase_send_to=os.environ.get("GOOGLE_ADS_PURCHASE_SEND_TO", "").strip())
+    return TrackingConfigOut(ads_purchase_send_to=os.environ.get("GOOGLE_ADS_PURCHASE_SEND_TO", "").strip(),
+                             ads_signup_send_to=os.environ.get("GOOGLE_ADS_SIGNUP_SEND_TO", "").strip())
 
 
 @router.get("/public/shops/{slug}", response_model=PublicShopOut)

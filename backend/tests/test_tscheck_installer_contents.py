@@ -47,11 +47,34 @@ def test_shipped_installer_archive_contains_agent_and_runtime():
     assert not missing, f"missing from archive: {missing}"
 
 
-def test_shipped_installer_is_version_0_5_0():
+def test_shipped_installer_is_version_0_5_1():
     agent_py = (pathlib.Path(__file__).resolve().parents[2] / "agent" / "printdrop_agent.py").read_text()
-    assert 'VERSION = "0.5.0"' in agent_py
-    assert INSTALLER.name == "PrintDrop-Setup-0.5.0.exe"
+    assert 'VERSION = "0.5.1"' in agent_py
+    assert INSTALLER.name == "PrintDrop-Setup-0.5.1.exe"
     assert not list(AGENT_DIST.glob("PrintDrop-Setup-0.4*.exe")), "stale 0.4.0 installer should not be shipped"
+
+
+def test_shipped_installer_pth_fix_and_agent_sys_path_insert():
+    """Root-cause fix for the 0.5.0 'double-click does nothing': python312._pth must add
+    the script folder ('..' relative to python/) to sys.path, and printdrop_agent.py must
+    also defensively insert its own directory, so `import printdrop_gui` succeeds under the
+    embeddable interpreter."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        subprocess.run(["7z", "x", f"-o{tmp}", str(INSTALLER)], capture_output=True, text=True, check=True)
+        pth = pathlib.Path(tmp) / "python" / "python312._pth"
+        assert pth.exists(), "python/python312._pth missing from extracted archive"
+        lines = [l.strip() for l in pth.read_text().splitlines()]
+        assert ".." in lines, f"python312._pth does not add the script folder via '..': {lines}"
+
+        agent_py = (pathlib.Path(tmp) / "printdrop_agent.py").read_text()
+        assert 'VERSION = "0.5.1"' in agent_py
+        assert "sys.path.insert" in agent_py and "sys.path" in agent_py
+
+        gui_py = pathlib.Path(tmp) / "printdrop_gui.py"
+        logo = pathlib.Path(tmp) / "printdrop-logo.png"
+        assert gui_py.exists() and logo.exists()
 
 
 def test_shipped_installer_version_info_has_printdrop_company_name():
@@ -65,4 +88,4 @@ def test_shipped_installer_version_info_has_printdrop_company_name():
                     for k, v in st.entries.items():
                         props[k.decode()] = v.decode()
     assert props.get("CompanyName") == "PrintDrop", props
-    assert props.get("FileVersion", "").startswith("0.5.0"), props
+    assert props.get("FileVersion", "").startswith("0.5.1"), props

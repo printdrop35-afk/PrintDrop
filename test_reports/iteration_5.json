@@ -1,0 +1,77 @@
+{
+  "passed": 9,
+  "failed": 0,
+  "bugs": [],
+  "action_items": [
+    {
+      "item": "Known pre-existing failure test_stage1::test_superadmin_scope fails (>1000 accumulated test orgs hit the /admin/organizations list limit so proprio@bastille.fr's org falls off the page) — unrelated to v0.5.1, called out in spec_deviations, not counted as a regression."
+    }
+  ],
+  "retest_needed": false,
+  "checks": [
+    {
+      "criterion": "Root cause of 'double-click does nothing' (v0.5.0) is fixed in the shipped installer",
+      "name": "tests/test_tscheck_installer_contents.py (6 tests incl. new test_shipped_installer_pth_fix_and_agent_sys_path_insert)",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "pytest tests/test_tscheck_installer_contents.py -> 6 passed. agent_dist/ contains only PrintDrop-Setup-0.5.1.exe + .sha256 (no stale 0.5.0/0.4.x); real NSIS PE32 exe; sha256 == sidecar; `7z x` extraction shows python/python312._pth lines == ['python312.zip','.','..','Lib','Lib\\\\site-packages','','import site'] (the '..' line added for the fix); extracted printdrop_agent.py contains VERSION = \"0.5.1\" and `sys.path.insert(0, _APP_DIR)`; printdrop_gui.py and printdrop-logo.png present in the extraction; PE version resource CompanyName='PrintDrop', FileVersion/ProductVersion start with 0.5.1."
+    },
+    {
+      "criterion": "Extracted app starts under the same sys.path rules as the embeddable Python",
+      "name": "/tmp/e2e051.py (reused, Xvfb :99, python -I, PRINTDROP_AGENT_DIR, PRINTDROP_SERVER=http://localhost:8001)",
+      "lane": "manual-e2e-script",
+      "status": "passed",
+      "evidence": "No-arg launch of extracted printdrop_agent.py under `python -I` (script folder NOT on sys.path, reproducing embeddable Python's _pth behaviour) stayed alive 6s with 'window process alive (pairing screen): True'; /tmp/e2e051-shots/pairing.png (import -window root) shows the real Tk pairing window, proving `import printdrop_gui` now succeeds (0.5.0 raised ModuleNotFoundError: No module named 'printdrop_gui' and exited silently). `--self-test out.json` -> checks.window == {'ok': True, 'required': True, 'detail': '8.6'}."
+    },
+    {
+      "criterion": "Pairing from the extracted app",
+      "name": "/tmp/e2e051.py (same run)",
+      "lane": "manual-e2e-script",
+      "status": "passed",
+      "evidence": "`pair --code BADCODE1` -> exit 1, \"Appairage refusé : Code d'appairage invalide ou expiré — générez un nouveau code dans PrintDrop et réessayez\"; code obtained via POST /api/shops/{id}/agents/pairing-code (login proprio@bastille.fr/Bastille2026!) then `pair --code <code> --name 'PC Test 051'` -> exit 0, \"Poste associé à « CyberCafé Bastille ». Configuration : /tmp/e2e051-data/config.json\"."
+    },
+    {
+      "criterion": "Printers reach the dashboard",
+      "name": "/tmp/e2e051.py (same run)",
+      "lane": "manual-e2e-script",
+      "status": "passed",
+      "evidence": "`--demo` window ran 9s, stayed alive (dashboard.png screenshot); GET /api/shops/{id}/agents shows 'PC Test 051' online=True version='0.5.1'; GET /api/shops/{id}/printers lists 'PrintDrop-Simulation (aucune impression)' for that agent; a 2nd `--background` launch exited 0 (single instance, handed over to the running window). Test agent revoked at end of script run (status now 'revoked' in /api/shops/{id}/agents, confirmed via curl) — no residual active test agent left in the shop."
+    },
+    {
+      "criterion": "Startup crash is reported, not silent",
+      "name": "manual forced-crash repro (printdrop_agent.py --self-test <invalid nested path>)",
+      "lane": "manual-e2e-script",
+      "status": "passed",
+      "evidence": "Ran `python -I printdrop_agent.py --self-test /tmp/.../bad\\0.json/x` against a fresh PRINTDROP_AGENT_DIR to force main() to raise inside self_test(); process exited 0 after printing the French crash message ('...Le détail est enregistré dans : .../crash.log...'); crash.log was written under PRINTDROP_AGENT_DIR containing 'PrintDrop 0.5.1 — <timestamp>' plus the full Python traceback (main -> self_test -> Path.write_text). Code path for the Windows MessageBox (ctypes.windll.user32.MessageBoxW under sys.platform=='win32') verified by source inspection only, per spec_deviations (no Windows machine available)."
+    },
+    {
+      "criterion": "Dashboard download serves 0.5.1 (local)",
+      "name": "owner-devices-download-v051",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Logged in as proprio@bastille.fr, /dashboard/imprimantes devices-download-agent shows 'v0.5.1'; captured GET /api/agent-download response via page.waitForResponse -> available=true, version='0.5.1'."
+    },
+    {
+      "criterion": "Dashboard download serves 0.5.1 (public preview ingress)",
+      "name": "preview-owner-devices-download-v051",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Same flow re-run against https://print-drop-6--08uafkjn.preview.emergentagent.com; devices-download-agent shows 'v0.5.1'."
+    },
+    {
+      "criterion": "Dashboard download file bytes match sha256",
+      "name": "tests/test_tscheck_dashboard_download_v051.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "pytest -> 2 passed. GET /api/agent-download as owner -> available=true, version='0.5.1'; GET /api/agent-download/file bytes sha256 == info.sha256 == PrintDrop-Setup-0.5.1.exe.sha256 sidecar; Content-Disposition contains '0.5.1'; anonymous GET on both endpoints -> 401."
+    },
+    {
+      "criterion": "No regression (full backend suite)",
+      "name": "full pytest suite",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "cd /app/backend && python -m pytest -q -p no:cacheprovider -> 72 passed, 1 failed in 32.65s. The sole failure is tests/test_stage1.py::test_superadmin_scope, the pre-existing known issue named in spec_deviations (>1000 accumulated test organisations in the preview DB push proprio@bastille.fr's org off the /admin/organizations list page), unrelated to the v0.5.1 change."
+    }
+  ],
+  "notes": "Briefing advanced from v0.5.0 (iteration 4) to v0.5.1, which fixes the 'double-click does nothing' root cause (missing '..' in python312._pth + defensive sys.path insert in printdrop_agent.py) plus adds crash.log/MessageBox reporting for unhandled startup errors. backend/agent_dist already shipped only PrintDrop-Setup-0.5.1.exe + sidecar, and the backend test files (test_tscheck_installer_contents.py, test_tscheck_dashboard_download_v051.py) had already been updated for 0.5.1 by the time this session started; I added one new backend test (test_shipped_installer_pth_fix_and_agent_sys_path_insert) to directly assert the '..' line in the extracted python312._pth plus the extracted agent's VERSION/sys.path.insert, since no existing test opened the archive to check that file. Added two new browser checks (owner-devices-download-v051 local + preview) for the updated version label/API. The four GUI-facing criteria (sys.path startup fix, pairing, printers-to-dashboard, crash reporting) have no web DOM to drive with Playwright — they are a Tk desktop window under Xvfb, not the SPA — so they were exercised with the project's own /tmp/e2e051.py script (per seed_facts) under `python -I` + Xvfb, which is the closest reproduction of the embeddable-Python sys.path bug per spec_deviations (no Windows machine available). For the crash-reporting criterion I additionally forced main() to raise (invalid self-test output path) to directly observe crash.log being written with a full traceback; the Windows MessageBox call itself was verified by source inspection only (ctypes.windll.user32.MessageBoxW, guarded by sys.platform=='win32'), as instructed. The one test agent paired during the e2e script ('PC Test 051') was revoked by the script itself and confirmed status='revoked' via a follow-up curl; no seeded/production data was touched. All 6 acceptance_matrix criteria covered by 9 artifacts (several criteria needed both local+preview UI or both API+manual-script coverage). No bugs found; the only non-passing item is the already-known, out-of-scope test_superadmin_scope failure, recorded as an action_item rather than a bug per spec_deviations."
+}

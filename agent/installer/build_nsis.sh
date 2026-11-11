@@ -19,7 +19,8 @@ msiextract -C tk tcltk.msi >/dev/null
 cp tk/DLLs/* "$STAGE/python/"
 cp -r tk/tcl/tcl8.6 tk/tcl/tk8.6 tk/tcl/tcl8 "$STAGE/python/tcl/"
 cp -r tk/Lib/tkinter "$STAGE/python/Lib/" && rm -rf "$STAGE/python/Lib/tkinter/test"
-printf 'python312.zip\n.\nLib\nLib\\site-packages\nimport site\n' > "$STAGE/python/python312._pth"
+# ".." = install folder (printdrop_agent.py + printdrop_gui.py): the ._pth file replaces sys.path entirely
+printf 'python312.zip\n.\n..\nLib\nLib\\site-packages\nimport site\n' > "$STAGE/python/python312._pth"
 for w in wheels/*.whl; do unzip -q -o "$w" -d "$STAGE/python/Lib/site-packages"; done
 for f in python/pythonw.exe python/_tkinter.pyd python/tcl/tcl8.6/init.tcl python/tcl/tk8.6/tk.tcl python/Lib/tkinter/__init__.py \
          python/Lib/site-packages/win32/win32print.pyd python/Lib/site-packages/pywin32_system32/pywintypes312.dll \

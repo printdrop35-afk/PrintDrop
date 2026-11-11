@@ -75,10 +75,21 @@ jobs:
         shell: pwsh
         run: |
           $app = Join-Path $env:ProgramFiles 'PrintDrop'
-          $p = Start-Process "$app\python\pythonw.exe" -ArgumentList "`"$app\printdrop_agent.py`"",'--background' -PassThru
-          Start-Sleep 10
-          if ($p.HasExited) { Get-Content "$env:LOCALAPPDATA\PrintDrop\agent.log" -ErrorAction SilentlyContinue; throw "L'agent s'est arrêté" }
+          Get-Process pythonw -ErrorAction SilentlyContinue | Stop-Process -Force
+          # exactly what the Start menu shortcut does (double-click): the window must open and stay open
+          $p = Start-Process "$app\python\pythonw.exe" -ArgumentList "`"$app\printdrop_agent.py`"" -PassThru
+          $title = ""
+          for ($i = 0; $i -lt 20 -and -not $title; $i++) { Start-Sleep 1; $p.Refresh(); if ($p.HasExited) { break }; $title = $p.MainWindowTitle }
+          if ($p.HasExited -or $title -notlike 'PrintDrop*') {
+            Get-Content "$env:LOCALAPPDATA\PrintDrop\crash.log","$env:LOCALAPPDATA\PrintDrop\agent.log" -ErrorAction SilentlyContinue
+            throw "La fenêtre PrintDrop ne s'ouvre pas (titre: '$title', terminé: $($p.HasExited))"
+          }
+          Write-Host "Fenêtre ouverte : $title"
           Stop-Process -Id $p.Id -Force
+          $b = Start-Process "$app\python\pythonw.exe" -ArgumentList "`"$app\printdrop_agent.py`"",'--background' -PassThru
+          Start-Sleep 10
+          if ($b.HasExited) { Get-Content "$env:LOCALAPPDATA\PrintDrop\crash.log" -ErrorAction SilentlyContinue; throw "L'agent en arrière-plan s'est arrêté" }
+          Stop-Process -Id $b.Id -Force
       - name: Désinstallation silencieuse
         shell: pwsh
         run: |

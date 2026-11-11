@@ -728,6 +728,7 @@ class OnboardingStep(BaseModel):
 
 class TrackingConfigOut(BaseModel):
     ads_purchase_send_to: str = ""  # Google Ads « AW-…/label » for the purchase conversion
+    ads_signup_send_to: str = ""  # Google Ads « AW-…/label » for the 14-day trial sign-up conversion
 
 
 class AgentUpdateItem(BaseModel):

@@ -10,6 +10,7 @@ import { AuthShell } from "@/components/AuthShell";
 import { apiPost, errorMessage } from "@/lib/api";
 import { beginSession } from "@/lib/session";
 import { queryClient } from "@/lib/queryClient";
+import { reportConversion } from "@/lib/tracking";
 import { ME_KEY } from "@/hooks/useMe";
 import type { MeOut, RegisterIn } from "@/lib/types";
 
@@ -34,6 +35,7 @@ export default function Register() {
     onSuccess: (me) => {
       beginSession();
       queryClient.setQueryData(ME_KEY, me);
+      void reportConversion("signup", me.org?.id ?? me.user.id); // Google Ads: new 14-day trial
       toast.success("Votre espace PrintDrop est prêt");
       navigate("/dashboard");
     },
