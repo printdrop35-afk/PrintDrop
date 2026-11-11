@@ -21,6 +21,7 @@ from lib.security import new_secret_token, sha256, verify_file_link
 import asyncio
 from lib.storage import MEDIA_TYPES, convert_docx, MAX_BYTES, StorageError, count_pages, detect_kind, read_file, save_file
 from models.schemas import (
+    TrackingConfigOut,
     DocumentUploadOut, OrderCreateIn, OrderPublicOut, PublicShopOut, QuoteIn, QuoteOut, TrackIn,
 )
 
@@ -62,6 +63,13 @@ async def build_quote(shop: dict, body: QuoteIn) -> dict:
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return finalize(shop["pricing"], lines, body.promo_code, await shop_vat_bp())
+
+
+@router.get("/public/tracking", response_model=TrackingConfigOut)
+async def tracking_config():
+    """Google Ads conversion target (set in backend/.env); empty = no conversion event is sent."""
+    import os
+    return TrackingConfigOut(ads_purchase_send_to=os.environ.get("GOOGLE_ADS_PURCHASE_SEND_TO", "").strip())
 
 
 @router.get("/public/shops/{slug}", response_model=PublicShopOut)

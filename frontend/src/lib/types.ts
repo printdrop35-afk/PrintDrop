@@ -203,6 +203,7 @@ export interface PlatformSettingsIn {
 export interface PlatformSettingsOut extends PlatformSettingsIn { payment_provider: string; payment_configured: boolean; payment_mode: "test" | "live" | "none" }
 export interface CheckoutIn { plan_code: string; period: BillingPeriod }
 export interface CheckoutOut { invoice_id: string; checkout_url: string }
+export interface TrackingConfigOut { ads_purchase_send_to: string }
 export interface InvoiceOut {
   id: string; number: string | null; status: "pending" | "paid" | "failed" | "canceled" | "expired"; plan_code: string; plan_name: string;
   period: BillingPeriod; amount_ht_cents: number; vat_rate_bp: number; vat_cents: number; amount_ttc_cents: number; provider: string;

@@ -726,6 +726,10 @@ class OnboardingStep(BaseModel):
     link: str
 
 
+class TrackingConfigOut(BaseModel):
+    ads_purchase_send_to: str = ""  # Google Ads « AW-…/label » for the purchase conversion
+
+
 class AgentUpdateItem(BaseModel):
     agent_id: str
     name: str

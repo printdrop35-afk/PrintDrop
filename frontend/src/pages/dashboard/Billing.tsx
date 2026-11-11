@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -9,7 +9,7 @@ import { apiGet, apiPost, errorMessage } from "@/lib/api";
 import { formatDate, formatDateTime, formatEUR, formatVat, tk } from "@/i18n";
 import { ME_KEY } from "@/hooks/useMe";
 import { cn } from "@/lib/utils";
-import type { BillingOverviewOut, BillingPeriod, CheckoutIn, CheckoutOut, InvoiceOut } from "@/lib/types";
+import type { BillingOverviewOut, BillingPeriod, CheckoutIn, CheckoutOut, InvoiceOut, TrackingConfigOut } from "@/lib/types";
 
 const SUB_TONE: Record<string, string> = {
   trialing: "bg-sky-100 text-sky-800", active: "bg-emerald-100 text-emerald-800", past_due: "bg-amber-100 text-amber-800",
@@ -24,6 +24,17 @@ function ReturnStatus({ invoiceId }: { invoiceId: string }) {
     refetchInterval: (query) => (query.state.data?.status === "pending" ? 4000 : false),
   });
   const inv = q.isError ? undefined : q.data;
+  const tracking = useQuery({ queryKey: ["tracking"], queryFn: () => apiGet<TrackingConfigOut>("/public/tracking"), staleTime: Infinity });
+  const sendTo = tracking.data?.ads_purchase_send_to;
+  useEffect(() => {
+    // Google Ads « Purchase » conversion: once per paid invoice, only when the payment is confirmed by Mollie
+    if (!inv || inv.status !== "paid" || !sendTo || !sendTo.includes("/")) return; // needs « AW-…/label »
+    const key = `ads-conv-${inv.id}`;
+    const w = window as unknown as { gtag?: (...a: unknown[]) => void };
+    if (localStorage.getItem(key) || typeof w.gtag !== "function") return;
+    w.gtag("event", "conversion", { send_to: sendTo, transaction_id: inv.number || inv.id, value: inv.amount_ttc_cents / 100, currency: "EUR" });
+    localStorage.setItem(key, "1");
+  }, [inv, sendTo]);
   if (inv && inv.status !== "pending") {
     qc.invalidateQueries({ queryKey: ["billing"] });
     qc.invalidateQueries({ queryKey: ME_KEY });
