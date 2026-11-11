@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /superadmin
+Disallow: /api/
+Disallow: /scan/
+Disallow: /suivi/
+
+Sitemap: https://printdrop.fr/sitemap.xml

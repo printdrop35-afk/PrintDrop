@@ -1,3 +1,4 @@
+import { PoweredBy } from "@/components/site/SiteChrome";
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -128,6 +129,7 @@ export default function Tracking() {
             <p className="flex items-center gap-2 text-xs text-muted-foreground"><RefreshCw className="size-3.5" /> Cette page se met à jour automatiquement.</p>
           </div>
         )}
+        <PoweredBy />
       </main>
     </div>
   );

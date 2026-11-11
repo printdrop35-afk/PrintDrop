@@ -217,10 +217,11 @@ export interface AdminSubscriptionIn { plan_code?: string; period?: BillingPerio
 
 // ---------- marketing site ----------
 export interface PublicPlanOut { code: string; name: string; description: string; features: string[]; monthly_ht_cents: number; yearly_ht_cents: number | null }
-export interface ContactIn { kind: "contact" | "demo"; name: string; business: string; email: string; subject: string; message: string; website: string }
+export interface ContactIn { kind: "contact" | "demo"; name: string; business: string; city?: string; phone?: string; email: string; subject: string; message: string; website: string }
+export interface PublicAgentVersionOut { version: string }
 export interface ContactOut { ok: boolean; delivered: boolean }
 export interface ContactMessageOut {
-  id: string; kind: "contact" | "demo"; name: string; business: string; email: string; subject: string; message: string;
+  id: string; kind: "contact" | "demo"; name: string; business: string; city: string; phone: string; email: string; subject: string; message: string;
   created_at: string; delivered: boolean; handled: boolean; handled_at: string | null;
 }
 export interface ContactMessageUpdateIn { handled: boolean }

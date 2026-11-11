@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from lib.pricing import PAPER_SIZES
 
@@ -759,6 +759,10 @@ class AgentReleaseIn(BaseModel):
     notes: str = Field(default="", max_length=500)
 
 
+class PublicAgentVersionOut(BaseModel):
+    version: str
+
+
 class AgentReleaseOut(BaseModel):
     url: str  # what shops download (printdrop.fr file if uploaded, else external link)
     version: str
@@ -988,10 +992,20 @@ class ContactIn(BaseModel):
     kind: Literal["contact", "demo"] = "contact"
     name: str = Field(min_length=2, max_length=100)
     business: str = Field(default="", max_length=120)
+    city: str = Field(default="", max_length=80)
+    phone: str = Field(default="", max_length=30)  # téléphone / WhatsApp, optional
     email: EmailStr
-    subject: str = Field(min_length=2, max_length=150)
-    message: str = Field(min_length=10, max_length=4000)
+    subject: str = Field(default="", max_length=150)
+    message: str = Field(default="", max_length=4000)  # optional for demo requests
     website: str = Field(default="", max_length=200)  # honeypot, must stay empty
+
+    @model_validator(mode="after")
+    def _required_by_kind(self):
+        if self.kind == "contact" and (len(self.subject.strip()) < 2 or len(self.message.strip()) < 10):
+            raise ValueError("Sujet (2 caractères min.) et message (10 caractères min.) requis")
+        if self.kind == "demo" and (len(self.business.strip()) < 2 or len(self.city.strip()) < 2):
+            raise ValueError("Nom de la boutique et ville requis pour une démo")
+        return self
 
 
 class ContactOut(BaseModel):
@@ -1004,6 +1018,8 @@ class ContactMessageOut(BaseModel):
     kind: Literal["contact", "demo"]
     name: str
     business: str
+    city: str = ""
+    phone: str = ""
     email: str
     subject: str
     message: str

@@ -190,3 +190,12 @@ backend/tests/test_stage1.py — auth, pricing, upload validation, token binding
 - Fix: `..` added to python312._pth (build_nsis.sh) + printdrop_agent.py inserts its own folder in sys.path; unhandled startup errors now write %LOCALAPPDATA%\PrintDrop\crash.log and show a Windows MessageBox. CI (windows-agent.yml) now launches the app like the Start-menu shortcut and requires a window titled « PrintDrop… ».
 - Shipped: backend/agent_dist/PrintDrop-Setup-0.5.1.exe (0.5.0 removed). Check script: /tmp/e2e051.py (runs the extracted 0.5.1 files with python -I under Xvfb).
 - Google Ads: lib/tracking.ts reportConversion("signup"|"purchase") — signup on Register success (env GOOGLE_ADS_SIGNUP_SEND_TO), purchase on paid invoice (GOOGLE_ADS_PURCHASE_SEND_TO); needs full « AW-…/label », skipped otherwise.
+
+## Marketing site (homepage v3)
+- Editable values in ONE file: frontend/src/config/site.ts (WhatsApp, phone, Plausible domain, OG image, agent screenshot, startup time FAQ answer, testimonials[], shops[] — social proof hidden while both empty, demo shop). Plan prices come live from GET /api/public/plans (Super-admin › Offres).
+- Homepage: hero (Essai gratuit / Essayer le portail client / Réserver une démo de 15 min → #demo), benefit strip, Comment ça marche, Pourquoi PrintDrop, Fonctionnalités, Démo QR, Impression automatique (agent version from GET /api/public/agent-version), Tarifs (+ counter-payment note + /roadmap link), FAQ (8), #demo form.
+- Demo form → POST /api/public/contact kind=demo {name, business, city, email, phone?, message?} → stored in contact_messages + e-mail to CONTACT_EMAIL. kind=contact still needs subject ≥2 + message ≥10.
+- /roadmap page (Disponible / À venir). Footer: Contact, Feuille de route, Mentions légales, Confidentialité, CGU.
+- PoweredBy line on /s/<slug> and /suivi → /inscription?ref=portal.
+- Plausible (lib/analytics.ts) loads only if plausibleDomain set; events: Signup CTA, Demo Request, WhatsApp Click, Signup Completed.
+- public/robots.txt, public/sitemap.xml.

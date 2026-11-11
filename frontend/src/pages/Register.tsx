@@ -13,6 +13,7 @@ import { queryClient } from "@/lib/queryClient";
 import { reportConversion } from "@/lib/tracking";
 import { ME_KEY } from "@/hooks/useMe";
 import type { MeOut, RegisterIn } from "@/lib/types";
+import { track } from "@/lib/analytics";
 
 const EMPTY: RegisterIn = { org_name: "", shop_name: "", city: "", owner_name: "", email: "", password: "" };
 
@@ -36,6 +37,7 @@ export default function Register() {
       beginSession();
       queryClient.setQueryData(ME_KEY, me);
       void reportConversion("signup", me.org?.id ?? me.user.id); // Google Ads: new 14-day trial
+      track("Signup Completed", { ref: new URLSearchParams(window.location.search).get("ref") ?? "direct" });
       toast.success("Votre espace PrintDrop est prêt");
       navigate("/dashboard");
     },

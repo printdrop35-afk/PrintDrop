@@ -65,7 +65,7 @@ export function ContactInbox() {
                     {m.kind === "demo" && <span className="rounded-full bg-[#E0F7FA] px-2 py-0.5 text-[11px] font-semibold text-[#0E7490]">Démo</span>}
                     <span className={cn("font-semibold", m.handled ? "text-slate-500" : "text-ink")}>{m.subject}</span>
                   </span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">{m.name}{m.business ? ` · ${m.business}` : ""} · {m.email}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">{m.name}{m.business ? ` · ${m.business}` : ""}{m.city ? ` · ${m.city}` : ""} · {m.email}{m.phone ? ` · ${m.phone}` : ""}</span>
                 </span>
                 <span className="text-xs text-muted-foreground">{formatDateTime(m.created_at)}</span>
               </button>

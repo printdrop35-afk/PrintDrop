@@ -21,6 +21,10 @@ import Contact from "@/pages/site/Contact";
 import LegalPage from "@/pages/site/Legal";
 import Counter from "@/pages/dashboard/Counter";
 import ScanDownload from "@/pages/ScanDownload";
+import Roadmap from "@/pages/site/Roadmap";
+import { initAnalytics } from "@/lib/analytics";
+
+initAnalytics();
 
 // One <Route> per page in src/pages; BrowserRouter already wraps this in main.tsx.
 export default function App() {
@@ -51,6 +55,7 @@ export default function App() {
           <Route path="journal" element={<Audit />} />
         </Route>
         <Route path="/contact" element={<Contact />} />
+        <Route path="/roadmap" element={<Roadmap />} />
         <Route path="/mentions-legales" element={<LegalPage slug="mentions-legales" />} />
         <Route path="/confidentialite" element={<LegalPage slug="confidentialite" />} />
         <Route path="/cgu" element={<LegalPage slug="cgu" />} />

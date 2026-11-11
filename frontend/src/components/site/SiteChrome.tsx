@@ -5,12 +5,14 @@ import { buttonVariants } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
 import { COMPANY, COMPANY_PENDING, formatSiren } from "@/lib/brand";
 import { cn } from "@/lib/utils";
+import { track } from "@/lib/analytics";
 
 const NAV = [
   { href: "#fonctionnalites", label: "Fonctionnalités" },
   { href: "#comment-ca-marche", label: "Comment ça marche" },
   { href: "#demo-qr", label: "Démo QR" },
   { href: "#tarifs", label: "Tarifs" },
+  { href: "#demo", label: "Démo" },
   { href: "#faq", label: "FAQ" },
 ];
 
@@ -29,7 +31,7 @@ export function SiteHeader({ home = false }: { home?: boolean }) {
         <div className="hidden items-center gap-2 lg:flex">
           <Link to="/suivi" className="rounded-md px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:text-ink" data-testid="site-nav-track">Suivre une commande</Link>
           <Link to={"/connexion"} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-9")} data-testid="site-nav-login">Se connecter</Link>
-          <Link to="/inscription" className={cn(buttonVariants({ size: "sm" }), "h-9 px-4")} data-testid="nav-cta-trial">Essai gratuit</Link>
+          <Link to="/inscription" onClick={() => track("Signup CTA", { from: "nav" })} className={cn(buttonVariants({ size: "sm" }), "h-9 px-4")} data-testid="nav-cta-trial">Essai gratuit</Link>
         </div>
         <button type="button" className="grid size-10 place-items-center rounded-lg text-ink lg:hidden" onClick={() => setOpen((o) => !o)} aria-label="Menu" aria-expanded={open} data-testid="site-nav-toggle">
           {open ? <X className="size-5" /> : <Menu className="size-5" />}
@@ -47,6 +49,16 @@ export function SiteHeader({ home = false }: { home?: boolean }) {
         </nav>
       )}
     </header>
+  );
+}
+
+/** Discreet growth link shown at the bottom of the customer portal and tracking pages. */
+export function PoweredBy({ className }: { className?: string }) {
+  return (
+    <p className={cn("px-4 py-6 text-center text-[11px] leading-relaxed text-slate-400", className)} data-testid="powered-by">
+      Propulsé par PrintDrop – Vous gérez une boutique d'impression ?{" "}
+      <Link to="/inscription?ref=portal" className="underline-offset-2 hover:text-slate-600 hover:underline" data-testid="powered-by-link">Essayez gratuitement</Link>
+    </p>
   );
 }
 
@@ -74,6 +86,10 @@ export function SiteFooter() {
           <h2 className="text-xs font-semibold tracking-[0.15em] text-white uppercase">Informations</h2>
           <ul className="mt-4 space-y-2 text-sm">
             <li><Link to={"/contact"} className="transition-colors hover:text-white" data-testid="footer-link-contact">Contact</Link></li>
+            <li><Link to="/roadmap" className="transition-colors hover:text-white" data-testid="footer-link-roadmap">Voir la feuille de route</Link></li>
+            <li><Link to="/mentions-legales" className="transition-colors hover:text-white" data-testid="footer-link-mentions">Mentions légales</Link></li>
+            <li><Link to="/confidentialite" className="transition-colors hover:text-white" data-testid="footer-link-privacy">Politique de confidentialité</Link></li>
+            <li><Link to="/cgu" className="transition-colors hover:text-white" data-testid="footer-link-cgu">CGU</Link></li>
           </ul>
         </div>
       </div>

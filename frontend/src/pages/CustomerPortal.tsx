@@ -1,3 +1,4 @@
+import { PoweredBy } from "@/components/site/SiteChrome";
 import { useRef, useState, type ChangeEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
@@ -326,6 +327,7 @@ export default function CustomerPortal() {
             </section>
           </>
         )}
+        <PoweredBy className={shop?.accepting_orders ? "pb-28" : undefined} />
       </main>
 
       {shop?.accepting_orders && (

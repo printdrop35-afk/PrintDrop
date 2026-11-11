@@ -1,16 +1,22 @@
+import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
-  ArrowRight, BarChart3, Bell, Calculator, CheckCircle2, ChevronDown, Clock, FileText, Layers, ListOrdered, Printer, QrCode,
-  ShieldCheck, Smartphone, Store, Users,
+  ArrowRight, BarChart3, Calculator, CheckCircle2, ChevronDown, Clock, Download, FileText, ImageIcon, KeyRound, ListOrdered,
+  MessageCircle, Phone, Printer, QrCode, Quote, ShieldCheck, Smartphone, Store, Timer, Usb, Users,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { buttonVariants } from "@/components/ui/button";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
-import { ContactForm } from "@/pages/site/Contact";
-import { apiGet } from "@/lib/api";
+import { SITE_CONFIG } from "@/config/site";
+import { track } from "@/lib/analytics";
+import { apiGet, apiPost, errorMessage } from "@/lib/api";
 import { formatEUR } from "@/i18n";
 import { cn } from "@/lib/utils";
-import type { PublicPlanOut } from "@/lib/types";
+import type { ContactIn, ContactOut, PublicAgentVersionOut, PublicPlanOut } from "@/lib/types";
 
 const STEPS = [
   { icon: QrCode, title: "Le client scanne le QR code", text: "Affiché au comptoir ou en vitrine. Aucun compte ni application à installer." },
@@ -27,20 +33,35 @@ const FEATURES = [
   { icon: Users, title: "Équipe et multi-boutiques", text: "Comptes employés avec permissions, plusieurs points de vente, journal d'audit.", wide: true },
 ];
 
-const BENEFITS = [
-  { icon: Clock, title: "Moins d'attente au comptoir", text: "Plus de clés USB ni d'e-mails à ouvrir : les documents arrivent prêts à imprimer." },
-  { icon: ShieldCheck, title: "Documents privés", text: "Chaque boutique ne voit que ses propres commandes. Les fichiers sont ouverts par lien sécurisé à durée limitée." },
-  { icon: Bell, title: "Clients informés", text: "Message « commande prête » par e-mail, suivi de commande avec code et téléphone." },
-  { icon: Layers, title: "Prix justes et cohérents", text: "Le même tarif pour tous, calculé automatiquement, sans erreur de calcul au comptoir." },
+const FAQ = [
+  { q: "Est-ce compatible avec mon imprimante ?", a: "L'impression directe passe par l'agent PrintDrop sur un PC Windows 10/11 et utilise les imprimantes déjà installées sur ce PC (USB, Wi-Fi ou réseau), avec leur pilote habituel. Si votre imprimante imprime depuis ce PC, elle fonctionne en principe avec PrintDrop : testez-la pendant l'essai. Sans agent, vous pouvez toujours télécharger les documents et les imprimer vous-même." },
+  { q: "Faut-il laisser un PC allumé toute la journée ?", a: "Uniquement pour l'impression directe : l'agent doit tourner sur le PC relié aux imprimantes pendant vos heures d'ouverture (il peut démarrer avec Windows). Les commandes des clients sont reçues même PC éteint ; elles vous attendent dans le tableau de bord." },
+  { q: "Mes données et celles de mes clients sont-elles protégées (RGPD) ?", a: "Les données sont strictement isolées par entreprise : une boutique ne voit jamais les commandes d'une autre. Les documents sont envoyés dans un espace privé, ouverts uniquement par lien sécurisé à durée limitée, et supprimés automatiquement après le retrait ou l'annulation de la commande. Le détail figure dans la politique de confidentialité." },
+  { q: "Que se passe-t-il si le fichier d'un client est illisible ou mal formaté ?", a: "Le fichier est vérifié dès l'envoi : un format non accepté ou un document illisible est refusé avec un message clair, et le client peut en envoyer un autre. Les fichiers Word (.docx) sont convertis en PDF ; vous voyez le document avant d'imprimer et pouvez annuler la commande si besoin." },
+  { q: "Comment est calculé le prix ?", a: "Par le serveur, à partir des tarifs configurés par votre boutique (format, couleur, recto-verso, services, remises, minimum de commande). Le client voit le prix exact avant de valider et ne peut pas le modifier." },
+  { q: "Puis-je gérer plusieurs boutiques et une équipe ?", a: "Oui. Vous créez des comptes employés avec des permissions adaptées, et selon votre offre vous gérez plusieurs boutiques, chacune avec son QR code et ses tarifs. Un journal d'audit garde la trace des actions." },
+  { q: "Le paiement en ligne est-il disponible ?", a: "Pas encore pour vos clients : aujourd'hui, ils paient au comptoir (espèces ou carte) et vous enregistrez le paiement dans PrintDrop. Le paiement en ligne est prévu sur la feuille de route." },
+  { q: "Combien de temps pour démarrer ?", a: SITE_CONFIG.startupTime || "[À compléter]" },
 ];
 
-const FAQ = [
-  { q: "Mes clients doivent-ils installer une application ?", a: "Non. Ils scannent le QR code de votre boutique et utilisent la page web PrintDrop depuis le navigateur de leur téléphone, sans créer de compte." },
-  { q: "Quels fichiers sont acceptés ?", a: "PDF, images PNG et JPG, ainsi que les documents Word (.docx), convertis automatiquement en PDF avant impression." },
-  { q: "Comment le prix est-il calculé ?", a: "Selon la grille que vous configurez (format, couleur, recto-verso, services, remises). Le calcul est fait par le serveur : le client ne peut pas modifier le prix." },
-  { q: "Comment mes clients paient-ils ?", a: "Le paiement se fait au comptoir (espèces ou carte) et vous l'enregistrez dans PrintDrop. Le paiement en ligne par les clients n'est pas encore disponible." },
-  { q: "Quelles imprimantes sont compatibles ?", a: "L'impression directe passe par l'agent PrintDrop installé sur un PC Windows 10/11 et utilise les imprimantes installées sur ce PC (USB, Wi-Fi ou Ethernet). Testez-le sur votre matériel pendant l'essai. Sans agent, vous pouvez toujours télécharger les documents et les imprimer vous-même." },
-  { q: "Puis-je essayer avant de m'abonner ?", a: "Oui, l'essai gratuit dure 14 jours, sans carte bancaire. L'abonnement se renouvelle ensuite manuellement à chaque échéance, sans prélèvement automatique." },
+const STRIP = [
+  { icon: Clock, text: "Moins d'attente au comptoir" },
+  { icon: Usb, text: "Plus de clés USB (et de virus)" },
+  { icon: Calculator, text: "Prix toujours exacts, zéro litige" },
+  { icon: Printer, text: "Impression automatique depuis votre PC" },
+];
+
+const WHY = [
+  { icon: Timer, title: "Du temps gagné à chaque client", text: "Le client prépare sa commande dans la file d'attente. Au comptoir, vous n'avez plus qu'à imprimer et encaisser." },
+  { icon: Calculator, title: "Moins d'erreurs", text: "Format, couleur, recto-verso et exemplaires sont choisis par le client et le prix est calculé selon vos tarifs. Plus de malentendu." },
+  { icon: ShieldCheck, title: "Fini l'e-mail perso et les clés USB", text: "Les documents arrivent dans votre espace PrintDrop, pas dans votre boîte mail. Aucune clé USB inconnue branchée sur votre PC." },
+  { icon: Users, title: "Servir plus de clients", text: "Les commandes s'enchaînent sans bouchon au comptoir, même aux heures de pointe, avec un code de suivi pour chaque client." },
+];
+
+const AGENT_STEPS = [
+  { title: "Téléchargez l'agent", text: "Depuis « Imprimantes » dans votre tableau de bord, installez PrintDrop sur le PC Windows 10/11 relié à vos imprimantes." },
+  { title: "Appairez-le à votre boutique", text: "Saisissez le code d'appairage affiché dans le tableau de bord. L'agent détecte les imprimantes installées sur le PC." },
+  { title: "Imprimez en un clic", text: "Lancez une commande depuis le tableau de bord : les fichiers partent directement vers l'imprimante, sans téléchargement ni ouverture manuelle." },
 ];
 
 export default function LandingV2() {
@@ -67,17 +88,31 @@ export default function LandingV2() {
                 gagnez du temps au comptoir et modernisez votre activité.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <Link to="/inscription" className={cn(buttonVariants({ size: "lg" }), "h-12 px-6 text-base")} data-testid="hero-cta-trial">
+                <Link to="/inscription" onClick={() => track("Signup CTA", { from: "hero" })} className={cn(buttonVariants({ size: "lg" }), "h-12 px-6 text-base")} data-testid="hero-cta-trial">
                   Essai gratuit 14 jours <ArrowRight className="size-4" />
                 </Link>
-                <Link to={"/contact?sujet=demo"} className={cn(buttonVariants({ variant: "outline", size: "lg" }), "h-12 px-6 text-base")} data-testid="hero-cta-demo">
-                  Réserver une démo
+                <Link to={`/s/${SITE_CONFIG.demoShop.slug}`} className={cn(buttonVariants({ variant: "outline", size: "lg" }), "h-12 px-6 text-base")} data-testid="hero-cta-portal">
+                  Essayer le portail client
                 </Link>
+                <a href="#demo" className="inline-flex h-12 items-center gap-2 rounded-md px-3 text-base font-medium text-azure underline-offset-4 transition-colors hover:text-ink hover:underline" data-testid="hero-cta-demo">
+                  Réserver une démo de 15 min
+                </a>
               </div>
               <p className="mt-4 text-sm text-slate-500">Sans carte bancaire · Sans engagement · Paiement au comptoir pour vos clients</p>
             </div>
             <PhoneDemo />
           </div>
+        </section>
+
+        {/* BENEFIT STRIP */}
+        <section aria-label="Bénéfices" className="bg-ink text-white">
+          <ul className="mx-auto grid max-w-7xl grid-cols-1 gap-x-6 gap-y-4 px-5 py-6 sm:grid-cols-2 sm:px-8 lg:grid-cols-4" data-testid="benefit-strip">
+            {STRIP.map((b, i) => (
+              <li key={b.text} className="flex items-center gap-3 text-sm font-medium" data-testid={`benefit-strip-${i}`}>
+                <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-white/10 text-[#5EEAD4]"><b.icon className="size-4" aria-hidden="true" /></span>{b.text}
+              </li>
+            ))}
+          </ul>
         </section>
 
         {/* WHAT IS */}
@@ -105,6 +140,23 @@ export default function LandingV2() {
               </li>
             ))}
           </ol>
+        </section>
+
+        {/* WHY */}
+        <section id="pourquoi" className="scroll-mt-20 border-y bg-white">
+          <div className="mx-auto max-w-7xl px-5 py-20 sm:px-8">
+            <p className="text-xs font-semibold tracking-[0.15em] text-azure uppercase">Pourquoi PrintDrop</p>
+            <h2 className="mt-3 max-w-2xl font-heading text-3xl font-bold text-ink sm:text-4xl">Ce que ça change pour votre boutique.</h2>
+            <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {WHY.map((w, i) => (
+                <article key={w.title} className="rounded-xl border bg-background p-6 transition-[border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-azure/30" data-testid={`why-card-${i}`}>
+                  <span className="grid size-10 place-items-center rounded-lg bg-white text-azure ring-1 ring-slate-200"><w.icon className="size-5" aria-hidden="true" /></span>
+                  <h3 className="mt-4 font-semibold text-ink">{w.title}</h3>
+                  <p className="mt-1.5 text-sm leading-relaxed text-slate-600">{w.text}</p>
+                </article>
+              ))}
+            </div>
+          </div>
         </section>
 
         {/* FEATURES */}
@@ -144,14 +196,14 @@ export default function LandingV2() {
               <p className="text-xs font-semibold tracking-[0.15em] text-[#5EEAD4] uppercase">Démo QR</p>
               <h2 className="mt-3 font-heading text-3xl font-bold">Essayez le portail client comme vos clients.</h2>
               <p className="mt-4 leading-relaxed text-slate-300">
-                Ouvrez la boutique de démonstration, envoyez un document et voyez le prix se calculer. C'est exactement la page que vos clients obtiennent en scannant votre QR code.
+                Ouvrez la boutique de démonstration « {SITE_CONFIG.demoShop.name} », envoyez un document et voyez le prix se calculer. C'est exactement la page que vos clients obtiennent en scannant votre QR code.
               </p>
               <ul className="mt-6 space-y-2 text-sm text-slate-200">
                 {["Aucune installation, fonctionne sur tous les smartphones", "Prix affiché avant validation", "Code de suivi remis au client"].map((t) => (
                   <li key={t} className="flex gap-2"><CheckCircle2 className="size-4 shrink-0 text-[#08BBD0]" /> {t}</li>
                 ))}
               </ul>
-              <Link to={"/s/cybercafe-bastille"} className={cn(buttonVariants({ size: "lg" }), "mt-8 h-12 bg-[#08BBD0] px-6 text-[#042F2E] hover:bg-[#069EAF]")} data-testid="qr-demo-open">
+              <Link to={`/s/${SITE_CONFIG.demoShop.slug}`} className={cn(buttonVariants({ size: "lg" }), "mt-8 h-12 bg-[#08BBD0] px-6 text-[#042F2E] hover:bg-[#069EAF]")} data-testid="qr-demo-open">
                 <Smartphone className="size-4" /> Ouvrir la boutique de démonstration
               </Link>
             </div>
@@ -160,19 +212,8 @@ export default function LandingV2() {
           </div>
         </section>
 
-        {/* BENEFITS */}
-        <section className="mx-auto max-w-7xl px-5 py-20 sm:px-8">
-          <p className="text-xs font-semibold tracking-[0.15em] text-azure uppercase">Pour les professionnels</p>
-          <h2 className="mt-3 max-w-2xl font-heading text-3xl font-bold text-ink sm:text-4xl">Pensé pour le quotidien d'une boutique d'impression.</h2>
-          <div className="mt-12 grid gap-x-10 gap-y-8 sm:grid-cols-2">
-            {BENEFITS.map((b) => (
-              <div key={b.title} className="flex gap-4">
-                <b.icon className="mt-0.5 size-6 shrink-0 text-azure" />
-                <div><h3 className="font-semibold text-ink">{b.title}</h3><p className="mt-1 text-sm leading-relaxed text-slate-600">{b.text}</p></div>
-              </div>
-            ))}
-          </div>
-        </section>
+        {/* WINDOWS AGENT */}
+        <AgentSection />
 
         {/* PRICING */}
         <section id="tarifs" className="scroll-mt-20 border-y bg-white">
@@ -192,14 +233,21 @@ export default function LandingV2() {
                   <ul className="mt-5 flex-1 space-y-2 text-sm text-slate-700">
                     {p.features.map((f) => <li key={f} className="flex gap-2"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-azure" /> {f}</li>)}
                   </ul>
-                  <Link to="/inscription" className={cn(buttonVariants({ variant: i === 1 ? "default" : "outline" }), "mt-6 w-full")} data-testid={`plan-${p.code}-cta`}>Commencer l'essai</Link>
+                  <Link to="/inscription" onClick={() => track("Signup CTA", { from: `plan-${p.code}` })} className={cn(buttonVariants({ variant: i === 1 ? "default" : "outline" }), "mt-6 w-full")} data-testid={`plan-${p.code}-cta`}>Commencer l'essai</Link>
                 </article>
               ))}
               {plans.isPending && <p className="text-sm text-slate-500">Chargement des offres…</p>}
             </div>
             {/* Note: « Le plus choisi » is a presentation highlight, not a usage statistic. */}
+            <p className="mt-8 text-sm text-slate-600" data-testid="pricing-payment-note">
+              Le paiement en ligne pour vos clients arrive bientôt. Aujourd'hui, l'encaissement se fait au comptoir.
+            </p>
+            <Link to="/roadmap" className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-azure hover:underline" data-testid="pricing-roadmap-link">Voir la feuille de route <ArrowRight className="size-3.5" /></Link>
           </div>
         </section>
+
+        {/* SOCIAL PROOF — only rendered with real data from config/site.ts */}
+        <SocialProof />
 
         {/* FAQ */}
         <section id="faq" className="mx-auto max-w-3xl scroll-mt-20 px-5 py-20 sm:px-8">
@@ -216,15 +264,16 @@ export default function LandingV2() {
           </div>
         </section>
 
-        {/* CONTACT */}
-        <section id="contact" className="scroll-mt-20 bg-white">
+        {/* DEMO */}
+        <section id="demo" className="scroll-mt-20 bg-white">
           <div className="mx-auto grid max-w-7xl gap-10 px-5 py-20 sm:px-8 lg:grid-cols-[1fr_1.3fr]">
             <div>
-              <p className="text-xs font-semibold tracking-[0.15em] text-azure uppercase">Contact</p>
-              <h2 className="mt-3 font-heading text-3xl font-bold text-ink">Une question, une démo ?</h2>
-              <p className="mt-4 leading-relaxed text-slate-600">Écrivez-nous : nous vous répondons par e-mail et organisons une démonstration adaptée à votre boutique.</p>
+              <p className="text-xs font-semibold tracking-[0.15em] text-azure uppercase">Démo</p>
+              <h2 className="mt-3 font-heading text-3xl font-bold text-ink">Réserver une démo de 15 min</h2>
+              <p className="mt-4 leading-relaxed text-slate-600">Laissez-nous vos coordonnées : nous vous recontactons pour vous montrer PrintDrop sur un cas concret de votre boutique.</p>
+              <DemoContacts />
             </div>
-            <ContactForm />
+            <DemoForm />
           </div>
         </section>
 
@@ -233,8 +282,8 @@ export default function LandingV2() {
           <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-6 px-5 py-14 sm:px-8">
             <h2 className="max-w-xl font-heading text-3xl font-bold text-white">Modernisez votre comptoir dès aujourd'hui.</h2>
             <div className="flex flex-wrap gap-3">
-              <Link to="/inscription" className={cn(buttonVariants({ size: "lg" }), "h-12 bg-white px-6 text-azure hover:bg-slate-100")} data-testid="cta-trial">Essai gratuit 14 jours</Link>
-              <Link to={"/contact?sujet=demo"} className={cn(buttonVariants({ variant: "outline", size: "lg" }), "h-12 border-white/60 bg-transparent px-6 text-white hover:bg-white/10 hover:text-white")} data-testid="cta-demo">Réserver une démo</Link>
+              <Link to="/inscription" onClick={() => track("Signup CTA", { from: "footer-cta" })} className={cn(buttonVariants({ size: "lg" }), "h-12 bg-white px-6 text-azure hover:bg-slate-100")} data-testid="cta-trial">Essai gratuit 14 jours</Link>
+              <a href="#demo" className={cn(buttonVariants({ variant: "outline", size: "lg" }), "h-12 border-white/60 bg-transparent px-6 text-white hover:bg-white/10 hover:text-white")} data-testid="cta-demo">Réserver une démo de 15 min</a>
             </div>
           </div>
         </section>
@@ -301,5 +350,136 @@ function DashboardMock() {
       </div>
       <figcaption className="border-t px-4 py-2 text-[11px] text-slate-500">Illustration — données d'exemple.</figcaption>
     </figure>
+  );
+}
+
+function AgentSection() {
+  const v = useQuery({ queryKey: ["public-agent-version"], queryFn: () => apiGet<PublicAgentVersionOut>("/public/agent-version"), staleTime: 300_000 });
+  const version = v.isError ? null : v.data?.version;
+  return (
+    <section id="impression-automatique" className="mx-auto max-w-7xl scroll-mt-20 px-5 py-20 sm:px-8">
+      <div className="grid gap-12 lg:grid-cols-[1fr_1.1fr] lg:items-center">
+        <div>
+          <p className="text-xs font-semibold tracking-[0.15em] text-azure uppercase">Impression automatique</p>
+          <h2 className="mt-3 font-heading text-3xl font-bold text-ink sm:text-4xl">L'agent Windows envoie les commandes vers vos imprimantes.</h2>
+          <p className="mt-4 leading-relaxed text-slate-600">
+            Installé sur le PC de la boutique, l'agent PrintDrop reçoit les commandes que vous lancez depuis le tableau de bord et les imprime directement
+            sur vos imprimantes, au bon format et au bon nombre d'exemplaires. La commande passe en « Prête » une fois l'impression terminée.
+          </p>
+          <ol className="mt-8 space-y-5">
+            {AGENT_STEPS.map((s, i) => (
+              <li key={s.title} className="flex gap-4" data-testid={`agent-step-${i + 1}`}>
+                <span className="grid size-9 shrink-0 place-items-center rounded-full bg-azure font-mono text-sm font-semibold text-white">{i + 1}</span>
+                <div><h3 className="font-semibold text-ink">{s.title}</h3><p className="mt-1 text-sm leading-relaxed text-slate-600">{s.text}</p></div>
+              </li>
+            ))}
+          </ol>
+          <p className="mt-8 inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800" data-testid="agent-version-note">
+            {version ? `Version ${version}` : "Version en cours"} – en amélioration continue
+          </p>
+        </div>
+        <AgentScreenshot />
+      </div>
+    </section>
+  );
+}
+
+/** Replace by setting SITE_CONFIG.agentScreenshot to an image path. */
+function AgentScreenshot() {
+  const src: string = SITE_CONFIG.agentScreenshot;
+  if (src) return <img src={src} alt="Fenêtre de l'agent Windows PrintDrop" loading="lazy" className="w-full rounded-2xl border shadow-[0_24px_48px_-28px_rgba(9,38,92,0.35)]" data-testid="agent-screenshot" />;
+  return (
+    <div className="grid aspect-[4/3] w-full place-items-center rounded-2xl border-2 border-dashed border-slate-300 bg-[#F4F7FC] text-center text-sm text-slate-500" data-testid="agent-screenshot-placeholder">
+      <div><ImageIcon className="mx-auto size-8 text-slate-400" aria-hidden="true" /><p className="mt-2">Capture d'écran de l'agent Windows</p><p className="text-xs">(à remplacer)</p></div>
+    </div>
+  );
+}
+
+function SocialProof() {
+  const { testimonials, shops } = SITE_CONFIG;
+  if (testimonials.length === 0 && shops.length === 0) return null;
+  return (
+    <section className="mx-auto max-w-7xl px-5 py-20 sm:px-8" data-testid="social-proof">
+      <h2 className="font-heading text-3xl font-bold text-ink">Ils nous font confiance</h2>
+      {shops.length > 0 && (
+        <ul className="mt-8 flex flex-wrap items-center gap-x-10 gap-y-4" data-testid="social-proof-shops">
+          {shops.map((sh) => (
+            <li key={sh.name} className="text-sm font-semibold text-slate-600">
+              {sh.logo ? <img src={sh.logo} alt={sh.name} className="h-10 w-auto" loading="lazy" /> : <>{sh.name}{sh.city ? ` · ${sh.city}` : ""}</>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {testimonials.length > 0 && (
+        <div className="mt-10 grid gap-5 md:grid-cols-2" data-testid="social-proof-testimonials">
+          {testimonials.map((t) => (
+            <figure key={t.author + t.shop} className="rounded-xl border bg-white p-6">
+              <Quote className="size-6 text-azure" aria-hidden="true" />
+              <blockquote className="mt-3 leading-relaxed text-slate-700">« {t.quote} »</blockquote>
+              <figcaption className="mt-4 text-sm"><span className="font-semibold text-ink">{t.author}</span> — {t.role}, {t.shop}{t.city ? ` (${t.city})` : ""}</figcaption>
+            </figure>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function DemoContacts() {
+  const whatsappNumber: string = SITE_CONFIG.contact.whatsappNumber;
+  const phone: string = SITE_CONFIG.contact.phone;
+  if (!whatsappNumber && !phone) return null;
+  return (
+    <div className="mt-8 flex flex-wrap gap-3">
+      {whatsappNumber && (
+        <a href={`https://wa.me/${whatsappNumber}`} target="_blank" rel="noopener noreferrer" onClick={() => track("WhatsApp Click")}
+          className={cn(buttonVariants({ variant: "outline" }), "h-11 border-emerald-300 text-emerald-800 hover:bg-emerald-50")} data-testid="demo-whatsapp-button">
+          <MessageCircle className="size-4" /> WhatsApp
+        </a>
+      )}
+      {phone && (
+        <a href={`tel:${phone.replace(/\s/g, "")}`} className={cn(buttonVariants({ variant: "outline" }), "h-11")} data-testid="demo-phone-link">
+          <Phone className="size-4" /> {phone}
+        </a>
+      )}
+    </div>
+  );
+}
+
+const EMPTY_DEMO: ContactIn = { kind: "demo", name: "", business: "", city: "", email: "", phone: "", subject: "", message: "", website: "" };
+
+function DemoForm() {
+  const [form, setForm] = useState<ContactIn>(EMPTY_DEMO);
+  const send = useMutation({
+    mutationFn: () => apiPost<ContactOut>("/public/contact", form),
+    onSuccess: () => track("Demo Request"),
+  });
+  const set = (k: keyof ContactIn) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const submit = (e: FormEvent) => { e.preventDefault(); send.mutate(); };
+
+  if (send.data) {
+    return (
+      <div className="rounded-xl border bg-background p-6" data-testid="demo-success" role="status">
+        <CheckCircle2 className="size-7 text-emerald-600" />
+        <p className="mt-3 font-semibold text-ink">Merci, votre demande de démo a bien été enregistrée.</p>
+        <p className="mt-1 text-sm text-slate-600">Nous vous recontactons rapidement par e-mail{form.phone ? " ou par téléphone" : ""} pour fixer un créneau de 15 minutes.</p>
+      </div>
+    );
+  }
+  return (
+    <form onSubmit={submit} className="grid gap-4 rounded-xl border bg-background p-6 sm:grid-cols-2" data-testid="demo-form">
+      <div className="space-y-1.5"><Label htmlFor="d-name">Nom *</Label><Input id="d-name" required minLength={2} maxLength={100} value={form.name} onChange={set("name")} autoComplete="name" data-testid="demo-name" /></div>
+      <div className="space-y-1.5"><Label htmlFor="d-business">Nom de la boutique *</Label><Input id="d-business" required minLength={2} maxLength={120} value={form.business} onChange={set("business")} autoComplete="organization" data-testid="demo-business" /></div>
+      <div className="space-y-1.5"><Label htmlFor="d-city">Ville *</Label><Input id="d-city" required minLength={2} maxLength={80} value={form.city} onChange={set("city")} autoComplete="address-level2" data-testid="demo-city" /></div>
+      <div className="space-y-1.5"><Label htmlFor="d-email">E-mail *</Label><Input id="d-email" type="email" required value={form.email} onChange={set("email")} autoComplete="email" data-testid="demo-email" /></div>
+      <div className="space-y-1.5 sm:col-span-2"><Label htmlFor="d-phone">Téléphone / WhatsApp (facultatif)</Label><Input id="d-phone" type="tel" maxLength={30} value={form.phone} onChange={set("phone")} autoComplete="tel" data-testid="demo-phone" /></div>
+      <div className="space-y-1.5 sm:col-span-2"><Label htmlFor="d-message">Message (facultatif)</Label><Textarea id="d-message" maxLength={4000} rows={4} value={form.message} onChange={set("message")} placeholder="Ex : nombre d'imprimantes, horaires, questions…" data-testid="demo-message" /></div>
+      <input type="text" name="website" value={form.website} onChange={set("website")} tabIndex={-1} autoComplete="off" className="hidden" aria-hidden="true" />
+      {send.isError && <p className="text-sm text-rose-700 sm:col-span-2" role="alert" data-testid="demo-error">{errorMessage(send.error)}</p>}
+      <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
+        <Button type="submit" disabled={send.isPending} className="h-11 px-6" data-testid="demo-submit">{send.isPending ? "Envoi…" : "Demander ma démo"}</Button>
+        <p className="text-xs text-slate-500">Vos données servent uniquement à organiser la démo.</p>
+      </div>
+    </form>
   );
 }

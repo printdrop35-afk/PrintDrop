@@ -11,7 +11,8 @@ from fastapi import APIRouter, HTTPException, Request
 from lib.authz import now_utc
 from lib.db import db
 from lib.notify import NotifyError, send_email
-from models.schemas import ContactIn, ContactOut, PublicPlanOut
+from lib.agent_release import get_release
+from models.schemas import ContactIn, ContactOut, PublicAgentVersionOut, PublicPlanOut
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/public", tags=["site"])
@@ -34,7 +35,7 @@ async def contact(body: ContactIn, request: Request):
     if await db.contact_messages.count_documents({"ip": ip, "created_at": {"$gte": since}}) >= CONTACT_LIMIT_PER_HOUR:
         raise HTTPException(status_code=429, detail="Trop de messages envoyés. Réessayez dans une heure.")
     msg = {"id": str(uuid.uuid4()), "kind": body.kind, "name": body.name.strip(), "business": body.business.strip(),
-           "email": str(body.email).lower(), "subject": body.subject.strip(), "message": body.message.strip(),
+           "city": body.city.strip(), "phone": body.phone.strip(), "email": str(body.email).lower(), "subject": body.subject.strip() or ("Demande de démo" if body.kind == "demo" else ""), "message": body.message.strip(),
            "ip": ip, "created_at": now_utc(), "delivered": False, "error": None}
     await db.contact_messages.insert_one(msg)
 
@@ -44,8 +45,9 @@ async def contact(body: ContactIn, request: Request):
     e = html.escape
     label = "Demande de démo" if body.kind == "demo" else "Message de contact"
     page = (f"<h2>{label} — site PrintDrop</h2><p><b>Nom :</b> {e(msg['name'])}<br><b>Établissement :</b> {e(msg['business']) or '—'}"
+            f"<br><b>Ville :</b> {e(msg['city']) or '—'}<br><b>Téléphone / WhatsApp :</b> {e(msg['phone']) or '—'}"
             f"<br><b>E-mail :</b> {e(msg['email'])}<br><b>Sujet :</b> {e(msg['subject'])}</p>"
-            f"<p style=\"white-space:pre-wrap\">{e(msg['message'])}</p>")
+            f"<p style=\"white-space:pre-wrap\">{e(msg['message']) or '(pas de message)'}</p>")
     try:
         await send_email(to=to, subject=f"[PrintDrop] {label} : {msg['subject'][:80]}", html=page)
         await db.contact_messages.update_one({"id": msg["id"]}, {"$set": {"delivered": True}})
@@ -54,3 +56,9 @@ async def contact(body: ContactIn, request: Request):
         logger.warning("contact email not sent: %s", exc)
         await db.contact_messages.update_one({"id": msg["id"]}, {"$set": {"error": str(exc)[:200]}})
         return ContactOut(ok=True, delivered=False)
+
+
+@router.get("/agent-version", response_model=PublicAgentVersionOut)
+async def public_agent_version():
+    """Version of the Windows agent currently offered to shops (marketing site note)."""
+    return PublicAgentVersionOut(version=(await get_release())["version"])
