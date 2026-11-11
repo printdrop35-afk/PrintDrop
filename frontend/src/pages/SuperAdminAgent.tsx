@@ -56,9 +56,9 @@ export default function SuperAdminAgent() {
               <Info label="Nom de l'Agent" value={o.owner_name} id="agent-info-name" />
               <Info label="Entreprise" value={o.name} id="agent-info-company" />
               <Info label="E-mail" value={o.owner_email} id="agent-info-email" />
-              <Info label="Téléphone" value={o.owner_phone} id="agent-info-phone" />
+              <Info label="Téléphone" value={o.owner_phone || "Non renseigné par l'Agent"} id="agent-info-phone" />
               <Info label="Adresse" value={d.shops.map((s) => [s.address, s.city].filter(Boolean).join(", ")).filter(Boolean).join(" · ")} id="agent-info-address" />
-              <Info label="Immatriculation (SIRET)" value="Non renseignée dans PrintDrop" id="agent-info-siret" />
+              <Info label="Immatriculation (SIREN / SIRET)" value={o.siret || "Non renseignée par l'Agent"} id="agent-info-siret" />
               <Info label="Créé le" value={formatDateTime(o.created_at)} id="agent-info-created" />
               <Info label="Statut · Formule" value={`${tk("org", o.status)} · ${o.printer_plan || "—"}`} id="agent-info-status" />
               <Info label="Boutiques" value={d.shops.map((s) => s.name).join(", ")} id="agent-info-shops" />

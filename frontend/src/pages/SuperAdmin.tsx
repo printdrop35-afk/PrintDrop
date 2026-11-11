@@ -1,7 +1,9 @@
+import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Building2, Euro, Loader2, LogOut, Receipt, Store, Users } from "lucide-react";
+import { Building2, Euro, Loader2, LogOut, Receipt, Search, Store, Users } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Logo } from "@/components/Logo";
@@ -20,7 +22,10 @@ export default function SuperAdmin() {
   const qc = useQueryClient();
   const isAdmin = !meQ.isError && meQ.data?.platform_role === "superadmin";
   const stats = useQuery({ queryKey: ["admin-stats"], queryFn: () => apiGet<AdminStatsOut>("/admin/stats"), enabled: isAdmin });
-  const orgs = useQuery({ queryKey: ["admin-orgs"], queryFn: () => apiGet<AdminOrgOut[]>("/admin/organizations"), enabled: isAdmin });
+  const [search, setSearch] = useState("");
+  const [term, setTerm] = useState("");
+  useEffect(() => { const t = setTimeout(() => setTerm(search.trim()), 300); return () => clearTimeout(t); }, [search]);
+  const orgs = useQuery({ queryKey: ["admin-orgs", term], queryFn: () => apiGet<AdminOrgOut[]>(`/admin/organizations${term ? `?q=${encodeURIComponent(term)}` : ""}`), enabled: isAdmin });
   const audit = useQuery({ queryKey: ["admin-audit"], queryFn: () => apiGet<AuditOut[]>("/admin/audit"), enabled: isAdmin });
   const update = useMutation({
     mutationFn: ({ id, body }: { id: string; body: AdminOrgUpdateIn }) => apiPatch<AdminOrgOut>(`/admin/organizations/${id}`, body),
@@ -74,7 +79,12 @@ export default function SuperAdmin() {
 
         <section className="rounded-2xl border bg-card">
           <div className="border-b p-5"><h2 className="text-lg font-semibold text-ink">Entreprises clientes</h2>
-            <p className="text-xs text-muted-foreground">Abonnement : offre et statut. « Offrir » prolonge sans paiement ni facture (tracé dans le journal).</p></div>
+            <p className="text-xs text-muted-foreground">Abonnement : offre et statut. « Offrir » prolonge sans paiement ni facture (tracé dans le journal).</p>
+            <div className="relative mt-3 max-w-md">
+              <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un Agent : nom, entreprise, e-mail, téléphone, SIRET" className="h-10 pl-9" data-testid="admin-orgs-search" aria-label="Rechercher un Agent" />
+            </div>
+            {term && <p className="mt-2 text-xs text-muted-foreground" data-testid="admin-orgs-search-count">{orgs.isFetching ? "Recherche…" : `${rows.length} résultat(s) pour « ${term} »`}</p>}</div>
           <Table data-testid="admin-orgs-table">
             <TableHeader><TableRow><TableHead>Agent · Entreprise</TableHead><TableHead className="hidden lg:table-cell">Téléphone</TableHead><TableHead className="hidden md:table-cell">Formule</TableHead><TableHead className="hidden md:table-cell">Documents</TableHead><TableHead className="hidden md:table-cell">Commandes</TableHead><TableHead className="hidden md:table-cell">Paiements</TableHead><TableHead className="hidden sm:table-cell">Encaissé</TableHead><TableHead>Abonnement</TableHead><TableHead>Compte</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
             <TableBody>

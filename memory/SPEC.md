@@ -211,3 +211,7 @@ backend/tests/test_stage1.py — auth, pricing, upload validation, token binding
 ## Super-admin Agent profile
 - Agent = shop org (owner), Super Agent = super-admin. List shows agent name/company/email/phone/registration/status/PRINTER/docs/orders/payments/revenue; name links to /superadmin/agents/:orgId.
 - GET /api/admin/organizations/{id}/details (platform:read; every query scoped to org_id; audited platform.org_view): company info, shops, staff, documents, payments + summary (only counter payment records exist: failed/refunds = 0; pending = open unpaid orders), orders, customers (grouped from orders, no customer accounts), activity (audit_logs). POST /api/admin/organizations/{id}/documents/{doc}/link → 5-min signed link, doc must belong to that org (404 otherwise), audited platform.document_view.
+## Agent profile fields, AI usage, admin search
+- organizations.phone / .siret: GET/PATCH /api/org/profile (PATCH owner-only billing:manage; SIREN 9 or SIRET 14 digits). Card « Entreprise » on /dashboard/boutique. Shown on super-admin list (Téléphone) and Agent page.
+- GET /api/org/ai-docs/usage → {created, in_orders, printed, since} for the current month (APP_TZ month start); card on /dashboard (Commandes). printed = AI doc in an order with status ready/picked_up.
+- GET /api/admin/organizations?q= — server-side search (company, Agent name/e-mail, phone, SIRET; regex-escaped, 200 max) + search box on /superadmin.

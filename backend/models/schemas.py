@@ -459,6 +459,7 @@ class AdminOrgOut(BaseModel):
     owner_email: str
     owner_name: str = ""
     owner_phone: str = ""
+    siret: str = ""
     printer_plan: str = ""
     shops_count: int
     orders_count: int
@@ -1281,3 +1282,29 @@ class AdminOrgDetailOut(BaseModel):
 
 class AdminDocLinkOut(BaseModel):
     url: str
+
+
+# ---------- Agent company profile + AI usage ----------
+class OrgProfileIn(BaseModel):
+    phone: str = Field(default="", max_length=30, pattern=r"^[0-9+().\s-]*$")
+    siret: str = Field(default="", max_length=20, pattern=r"^[0-9\s]*$")
+
+    @field_validator("siret")
+    @classmethod
+    def _siret(cls, v: str) -> str:
+        digits = v.replace(" ", "")
+        if digits and len(digits) not in (9, 14):
+            raise ValueError("SIREN (9 chiffres) ou SIRET (14 chiffres) attendu")
+        return v
+
+
+class OrgProfileOut(BaseModel):
+    phone: str
+    siret: str
+
+
+class AiDocUsageOut(BaseModel):
+    created: int  # AI documents created by customers this month
+    in_orders: int  # of which attached to an order
+    printed: int  # of which in an order that was printed (ready / picked up)
+    since: datetime

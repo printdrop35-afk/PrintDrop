@@ -123,7 +123,7 @@ export interface AuditOut {
 export interface AdminStatsOut { organizations: number; active_organizations: number; shops: number; users: number; orders: number; revenue_cents: number }
 export interface AdminOrgOut {
   id: string; name: string; status: "active" | "suspended"; plan: string; subscription: SubscriptionOut | null; owner_email: string;
-  owner_name: string; owner_phone: string; printer_plan: string;
+  owner_name: string; owner_phone: string; siret: string; printer_plan: string;
   shops_count: number; orders_count: number; documents_count: number; payments_count: number; revenue_cents: number; created_at: string;
 }
 export interface AdminShopRow { id: string; name: string; city: string; address: string; slug: string; created_at: string }
@@ -285,3 +285,6 @@ export interface CashSummaryOut {
   cash_cents: number; cash_count: number; card_cents: number; card_count: number; other_cents: number; other_count: number;
   total_cents: number; total_count: number; payments: CashPaymentOut[]; generated_at: string;
 }
+export interface OrgProfileIn { phone: string; siret: string }
+export interface OrgProfileOut { phone: string; siret: string }
+export interface AiDocUsageOut { created: number; in_orders: number; printed: number; since: string }

@@ -17,6 +17,7 @@ import { useDashboard } from "@/hooks/useDashboard";
 import { apiGet, apiPost, errorMessage } from "@/lib/api";
 import { formatDateTime, formatEUR, tk } from "@/i18n";
 import { useMe } from "@/hooks/useMe";
+import { AiDocUsageCard } from "@/components/OrgProfile";
 import type { OrderOut, OrderPayIn, OrderStatus, ShopStatsOut } from "@/lib/types";
 
 const FILTERS = [
@@ -231,6 +232,8 @@ export default function Orders() {
       </form>
 
       <AlertsBanner shopId={shop.id} onPaper={() => setPaperOpen(true)} onOpenOrder={async (id) => setSelected(await apiGet<OrderOut>(`/orders/${id}`))} />
+
+      <AiDocUsageCard />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Kpi label="Commandes du jour" value={s?.orders_today ?? "—"} tone="text-ink" testId="kpi-orders-today" />

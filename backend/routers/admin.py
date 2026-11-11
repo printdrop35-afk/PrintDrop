@@ -52,7 +52,7 @@ async def _org_rows(orgs: list[dict]) -> list[AdminOrgOut]:
         plan = plans.get(((o.get("subscription") or {}).get("plan_code")) or o.get("plan", ""))
         rows.append(AdminOrgOut(
             id=o["id"], name=o["name"], status=o["status"], plan=o.get("plan", ""), subscription=await subscription_view(o),
-            owner_email=owner.get("email", "—"), owner_name=owner.get("name", ""), owner_phone=owner.get("phone", "") or "",
+            owner_email=owner.get("email", "—"), owner_name=owner.get("name", ""), owner_phone=o.get("phone") or owner.get("phone") or "", siret=o.get("siret") or "",
             printer_plan=printer_label(plan),
             shops_count=shops.get(o["id"], 0), orders_count=orders.get(o["id"], 0),
             documents_count=docs.get(o["id"], 0), payments_count=pays.get(o["id"], 0),
@@ -62,8 +62,15 @@ async def _org_rows(orgs: list[dict]) -> list[AdminOrgOut]:
 
 
 @router.get("/organizations", response_model=list[AdminOrgOut])
-async def organizations(_: Principal = Depends(require_platform("platform:read"))):
-    orgs = await db.organizations.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+async def organizations(q: str = Query(default="", max_length=100), _: Principal = Depends(require_platform("platform:read"))):
+    """Optional server-side search (company, Agent name, e-mail, phone, SIRET) so any Agent is reachable beyond 1000 rows."""
+    f: dict = {}
+    term = q.strip()
+    if term:
+        rx = {"$regex": re.escape(term), "$options": "i"}
+        owner_ids = [u["id"] for u in await db.users.find({"$or": [{"email": rx}, {"name": rx}]}, {"_id": 0, "id": 1}).to_list(5000)]
+        f = {"$or": [{"name": rx}, {"phone": rx}, {"siret": rx}, {"owner_id": {"$in": owner_ids}}]}
+    orgs = await db.organizations.find(f, {"_id": 0}).sort("created_at", -1).to_list(1000 if not term else 200)
     return await _org_rows(orgs)
 
 

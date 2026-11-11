@@ -13,6 +13,7 @@ import { BRAND } from "@/lib/brand";
 import { ME_KEY } from "@/hooks/useMe";
 import { apiPatch, apiPost, errorMessage } from "@/lib/api";
 import type { ShopCreateIn, ShopOut, ShopUpdateIn } from "@/lib/types";
+import { OrgProfileCard } from "@/components/OrgProfile";
 
 function NewShopDialog() {
   const qc = useQueryClient();
@@ -118,6 +119,7 @@ export default function ShopSettings() {
           <Button className="mt-4 w-full" onClick={() => window.print()} data-testid="print-qr-poster-button"><Printer className="size-4" /> Imprimer l'affiche</Button>
         </section>
       </div>
+      <OrgProfileCard editable={can("billing:manage")} />
     </div>
   );
 }
