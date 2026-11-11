@@ -92,8 +92,13 @@ def test_one_click_agent_update(client):
     owner, _ = fresh_owner()
     info, agent, shop, printer = setup(owner, "PC maj")  # heartbeat reports v0.4.0
     try:
-        # no hosted installer => refused
+        # nothing newer than the agent => refused (the shipped installer may already be served)
+        from lib.agent_release import bundled_installer
+        b = bundled_installer()
+        if b:
+            agent.post("/agent/heartbeat", json={"version": b["version"], "printers": [], "scanners": []})
         assert owner.post(f"/agents/{info['agent_id']}/update").status_code == 409
+        agent.post("/agent/heartbeat", json={"version": "0.4.0", "printers": [], "scanners": []})
         exe = b"MZ" + b"\0" * 100 + b"Inno Setup Setup Data (6.2.2)" + b"\0" * (1024 * 1024)
         rel = admin.post("/admin/agent-release/upload", files={"file": ("PrintDrop-Setup-0.4.1.exe", exe)}).json()
         assert rel["version"] == "0.4.1"

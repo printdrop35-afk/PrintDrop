@@ -1,0 +1,66 @@
+{
+  "passed": 8,
+  "failed": 0,
+  "bugs": [],
+  "action_items": [],
+  "retest_needed": false,
+  "checks": [
+    {
+      "criterion": "Shipped installer is the new 0.5.0 build with the redesigned app",
+      "name": "test_tscheck_installer_contents.py (updated for 0.5.0: real NSIS exe, sha256 sidecar, archive contents incl. printdrop_gui.py/printdrop-logo.png/PIL.ImageTk/win32print.pyd/pywintypes312.dll, VERSION==0.5.0 in agent/printdrop_agent.py, no stale 0.4.x shipped, CompanyName=='PrintDrop' in PE version resource via pefile)",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "pytest tests/test_tscheck_installer_contents.py -> 5 passed. Confirmed: /app/backend/agent_dist/PrintDrop-Setup-0.5.0.exe only (no 0.4.* leftover); `file` -> 'PE32 executable (GUI) ... Nullsoft Installer self-extracting archive'; sha256 of file == .sha256 sidecar; `7z l` lists printdrop_agent.py, printdrop_gui.py, printdrop-logo.png, SumatraPDF.exe, python/pythonw.exe, python/_tkinter.pyd, PIL/ImageTk.py, win32/win32print.pyd, pywintypes312.dll; agent/printdrop_agent.py contains VERSION = \"0.5.0\"; pefile StringFileInfo -> CompanyName='PrintDrop', FileVersion/ProductVersion='0.5.0'."
+    },
+    {
+      "criterion": "Dashboard download shows 0.5.0 (local)",
+      "name": "owner-devices-download-v0-5-0",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Logged in as proprio@bastille.fr, /dashboard/imprimantes shows devices-download-agent containing 'v0.5.0', devices-download-meta with 'SHA-256', devices-download-unavailable absent; captured GET /api/agent-download response: available=true, version=0.5.0."
+    },
+    {
+      "criterion": "Dashboard download shows 0.5.0 (public preview ingress)",
+      "name": "preview-owner-devices-download-v050",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Same flow re-run against https://print-drop-6--08uafkjn.preview.emergentagent.com; devices-download-agent shows 'v0.5.0'."
+    },
+    {
+      "criterion": "Dashboard download file bytes match sha256",
+      "name": "test_tscheck_dashboard_download_v050.py::test_owner_agent_download_file_matches_shipped_installer_and_sidecar / ::test_anonymous_cannot_download_agent_file",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "pytest -> 2 passed. GET /api/agent-download as owner -> available=true, version=0.5.0; GET /api/agent-download/file bytes sha256 == info.sha256 == PrintDrop-Setup-0.5.0.exe.sha256 sidecar; Content-Disposition contains '0.5.0'; anonymous GET on both endpoints -> 401."
+    },
+    {
+      "criterion": "Agent app on Linux (simulation): pairing + errors",
+      "name": "/tmp/agent_e2e.py (reused, Xvfb :99, PRINTDROP_AGENT_DIR=/tmp/agtest, PRINTDROP_SERVER=http://localhost:8001)",
+      "lane": "manual-e2e-script",
+      "status": "passed",
+      "evidence": "`pair --code BADCODE1` -> exit 1, 'Appairage refusé : Code d'appairage invalide ou expiré...'; pair against http://localhost:9 -> 'Impossible de joindre http://localhost:9 : vérifiez la connexion Internet ou le pare-feu / antivirus de ce PC'; valid code from POST /api/shops/{id}/agents/pairing-code -> 'Poste associé à « CyberCafé Bastille ». Configuration : /tmp/agtest/config.json'."
+    },
+    {
+      "criterion": "Agent window runs, single instance, reports to dashboard",
+      "name": "/tmp/agent_e2e.py (same run)",
+      "lane": "manual-e2e-script",
+      "status": "passed",
+      "evidence": "`--demo` window stayed running throughout; 2nd `--background` launch exited 0 ('handed over to the running window'); GET /shops/{id}/agents shows the PC online=true version=0.5.0; its simulated printer 'PrintDrop-Simulation (aucune impression)' visible in GET /shops/{id}/printers. Screenshot dashboard.png (via `import -window root`) shows header 'PrintDrop', 'Agent Windows · v0.5.0', status pill 'En ligne', cards Connexion/Boutique associée/Ce PC, printers table with the simulated printer 'Prête', scanners panel, recent activity (test-connection -> 200 recorded), footer buttons Ouvrir PrintDrop/Journal/Dissocier ce PC/Quitter. Also exercised backend outage (stopped/restarted supervisor 'backend' per script contract) -> offline.png then reconnected.png shows online=true again after restart, confirming auto-retry/backoff reconnection; no application bug, backend restored to RUNNING and health 200 afterward."
+    },
+    {
+      "criterion": "Revocation and errors handled without crash",
+      "name": "/tmp/agent_e2e.py (same run)",
+      "lane": "manual-e2e-script",
+      "status": "passed",
+      "evidence": "After POST /api/agents/{id}/revoke, gui.poll() is None (process still alive) and /tmp/gui.log shows 'ERROR Clé refusée : poste révoqué' with no traceback; revoked.png screenshot shows red 'Dissocié' pill, orange banner 'Ce PC a été dissocié depuis le tableau de bord PrintDrop. Associez-le de nouveau avec un nouveau code.' and an 'Associer de nouveau' button — window fully functional, no crash. Test agent then killed (pkill printdrop_agent.py) and left revoked in DB (paired agent was a tscheck/pytest-style transient PC, not a seeded row)."
+    },
+    {
+      "criterion": "Website unchanged + Google tag; full backend suite",
+      "name": "home-page-has-gtm-tag + full pytest suite",
+      "lane": "browser+backend",
+      "status": "passed",
+      "evidence": "Browser check: home page HTML contains '<!-- Google tag (GTM-N4FZ258T) -->' and the gtm.js script tag immediately after <head> (within first 400 chars of head opening). Backend: cd /app/backend && python -m pytest -q -p no:cacheprovider -> 72 passed in 32.05s (67 pre-existing + 5 updated/new installer tests for 0.5.0 replacing the stale 0.4.0-specific assertions, + 2 new dashboard-download sha256 tests)."
+    }
+  ],
+  "notes": "Briefing updated since iteration 3: agent rebuilt as v0.5.0 with a redesigned Tk GUI window (printdrop_gui.py) shipped inside the installer alongside printdrop_agent.py; backend/agent_dist now ships only PrintDrop-Setup-0.5.0.exe (0.4.0 removed). Updated the existing backend installer-contents test file in place for the new file list/version/CompanyName instead of creating a duplicate, added one new backend test file for the dashboard-download byte-for-byte sha256 match (new criterion), and added 3 new browser checks (v0.5.0 dashboard label local+preview, home page GTM tag placement). The 3 GUI-facing criteria (pairing/errors, window+single-instance+dashboard-reporting, revocation-without-crash) have no normal DOM to drive with Playwright (it's a Tk desktop window under Xvfb, not the web app) so they were exercised with the project's own Linux e2e script at /tmp/agent_e2e.py as instructed in seed_facts, with `import -window root` screenshots as evidence reviewed above; recorded as lane 'manual-e2e-script' rather than 'browser' since they are not Playwright-driven, but each one captured concrete evidence (exit codes/stderr text, GET /shops/{id}/agents and /printers responses, screenshots of the actual Tk window) equivalent in rigor to a browser check. Per seed_facts the script's own backend stop/start for the reconnection test was kept unchanged; backend was confirmed RUNNING and healthy (GET /api/ -> 200) after the script finished. Per spec_deviations, no Windows machine is available so real .exe installation, WIA scanners, autostart registry and SmartScreen were not tested (expected, not reported as bugs); the unsigned installer's lack of a certificate is expected per spec_deviations. The one agent paired during this run was revoked at the end and the local process killed, leaving no residual running agent. No bugs found across all 6 acceptance_matrix criteria (8 artifacts total since 2 criteria span both local+preview UI or both UI+API)."
+}

@@ -25,12 +25,12 @@ for f in python/pythonw.exe python/_tkinter.pyd python/tcl/tcl8.6/init.tcl pytho
          python/Lib/site-packages/win32/win32print.pyd python/Lib/site-packages/pywin32_system32/pywintypes312.dll \
          python/Lib/site-packages/pywin32_system32/pythoncom312.dll python/Lib/site-packages/win32com/client/__init__.py \
          python/Lib/site-packages/pywin32.pth python/Lib/site-packages/requests/__init__.py python/Lib/site-packages/certifi/cacert.pem \
-         python/Lib/site-packages/PIL/Image.py; do
+         python/Lib/site-packages/PIL/Image.py python/Lib/site-packages/PIL/ImageTk.py; do
   [ -e "$STAGE/$f" ] || { echo "MANQUANT : $f" >&2; exit 1; }
 done
 rm -rf "$STAGE/python/Lib/site-packages/"{PyWin32.chm,adodbapi,isapi,pywin32-*.data}
 unzip -q -j sumatra.zip '*.exe' -d "$STAGE" && mv "$STAGE"/SumatraPDF*.exe "$STAGE/SumatraPDF.exe"
-cp "$AGENT/printdrop_agent.py" "$STAGE/" && cp "$AGENT/README.md" "$STAGE/Guide-installation.md"
+cp "$AGENT/printdrop_agent.py" "$AGENT/printdrop_gui.py" "$AGENT/printdrop-logo.png" "$STAGE/" && cp "$AGENT/README.md" "$STAGE/Guide-installation.md"
 python - "$STAGE/printdrop.ico" "$AGENT/../frontend/public/printdrop-app-icon-512.png" <<'PYICO'
 import sys
 from PIL import Image

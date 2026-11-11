@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PrintDrop Agent pour Windows (v0.2) — relie le PC du comptoir à une boutique PrintDrop.
+"""PrintDrop Agent pour Windows — relie le PC du comptoir à une boutique PrintDrop.
 
 Lancement :
   PrintDrop.exe                         fenêtre : appairage + état (aucun terminal nécessaire)
@@ -16,6 +16,7 @@ Sécurité / confidentialité :
 import argparse
 import base64
 import hashlib
+import collections
 import concurrent.futures
 import ipaddress
 import json
@@ -32,7 +33,7 @@ from pathlib import Path
 
 import requests
 
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 IS_WINDOWS = sys.platform == "win32"
 DEFAULT_SERVER = os.environ.get("PRINTDROP_SERVER", "https://printdrop.fr")
 DATA_DIR = Path(os.environ.get("PRINTDROP_AGENT_DIR") or (
@@ -43,6 +44,10 @@ PAPER = {"A4": "A4", "A3": "A3", "A5": "A5", "Letter": "letter", "Legal": "legal
 MAGIC = {"pdf": b"%PDF-", "png": b"\x89PNG", "jpg": b"\xff\xd8\xff"}
 NO_WINDOW = 0x08000000 if IS_WINDOWS else 0
 log = logging.getLogger("printdrop")
+
+
+class Revoked(Exception):
+    """The server refused this PC's key (revoked from the dashboard)."""
 
 
 class PrintError(Exception):
@@ -507,6 +512,17 @@ class Agent:
         self.journal: dict = load_json(JOURNAL_FILE, {})
         self.status = "Démarrage…"
         self.stop = threading.Event()
+        # live state shown by the window (printdrop_gui.py)
+        self.connected = False
+        self.revoked = False
+        self.last_ok = 0.0
+        self.error = ""
+        self.printers: list[dict] = []
+        self.scanners: list[dict] = []
+        self.activity: collections.deque = collections.deque(maxlen=50)
+
+    def note(self, kind: str, detail: str, ok: bool) -> None:
+        self.activity.appendleft({"at": time.time(), "kind": kind, "detail": detail, "ok": ok})
 
     def _journal(self, job: dict, state: str, reported: bool = False, error: str = "") -> None:
         self.journal[job["id"]] = {"state": state, "lease_id": job["lease_id"], "order": job["order_code"],
@@ -535,10 +551,12 @@ class Agent:
         save_json(JOURNAL_FILE, self.journal)
 
     def heartbeat(self) -> int:
-        r = self.api.post("/agent/heartbeat", {"version": VERSION, "printers": self.backend.printers(), "drivers": self.backend.drivers()[:300],
-                                               "scanners": list_scanners()[:20], "scanner_caps": list_scanner_caps()[:20]})
+        printers, caps = self.backend.printers(), list_scanner_caps()[:20]
+        self.printers, self.scanners = printers, caps
+        r = self.api.post("/agent/heartbeat", {"version": VERSION, "printers": printers, "drivers": self.backend.drivers()[:300],
+                                               "scanners": [c["name"] for c in caps] or list_scanners()[:20], "scanner_caps": caps})
         if r.status_code == 401:
-            raise SystemExit("Clé refusée : poste révoqué. Ré-associez-le depuis le tableau de bord.")
+            raise Revoked()
         r.raise_for_status()
         data = r.json()
         for cmd in data.get("commands", []):
@@ -560,6 +578,12 @@ class Agent:
         except Exception as exc:  # résultat honnête renvoyé au tableau de bord
             body = {"ok": False, "result": {}, "error": str(exc)[:500]}
         self.api.post(f"/agent/commands/{cmd['id']}/result", body)
+        labels = {"scan": "Scan", "copy": "Photocopie", "test_page": "Page de test", "test_connection": "Vérification imprimante",
+                  "install_printer": "Installation imprimante", "discover_all": "Recherche d'imprimantes", "self_update": "Mise à jour"}
+        if cmd["type"] in labels:
+            res = body["result"]
+            detail = body["error"] or (f"{res.get('pages')} page(s)" if "pages" in res else f"{res.get('scanned_pages')} p. × {res.get('copies_printed')}" if "scanned_pages" in res else "OK")
+            self.note(labels[cmd["type"]], detail, body["ok"] and not res.get("error"))
 
     def scan(self, pl: dict) -> dict:
         """Scans, then uploads every page immediately (pages already sent are kept even if a later one fails)."""
@@ -720,9 +744,11 @@ class Agent:
                     self.api.report(job["id"], job["lease_id"], "spooled")
                 self.backend.print_file(tmp, job, spooled)
                 self._journal(job, "printed")
+                self.note("Impression", f"Commande {job['order_code']} · {len(job['pages'])} page(s) · {job['printer_name']}", True)
             except PrintError as exc:
                 log.error("Échec %s : %s", job["order_code"], exc)
                 self._journal(job, "failed", error=str(exc))
+                self.note("Impression", f"Commande {job['order_code']} : {exc}", False)
             self.flush_reports()
         finally:
             tmp.unlink(missing_ok=True)
@@ -738,15 +764,30 @@ class Agent:
                 r.raise_for_status()
                 data = r.json()
                 self.status = data.get("message") or f"Connecté — {time.strftime('%H:%M:%S')}"
+                self.connected, self.last_ok, self.error = True, time.time(), ""
                 for job in data["jobs"]:
                     self.handle(job)
                 backoff = 5
                 if once:
                     return
                 self.stop.wait(poll)
+            except Revoked:
+                self.connected, self.revoked = False, True
+                self.status = self.error = "Ce PC a été dissocié depuis le tableau de bord PrintDrop. Associez-le de nouveau avec un nouveau code."
+                log.error("Clé refusée : poste révoqué")
+                return
             except requests.RequestException as exc:
-                self.status = "Serveur injoignable — nouvel essai…"
+                self.connected = False
+                self.status = self.error = (f"Serveur PrintDrop injoignable : vérifiez la connexion Internet. Nouvel essai dans {backoff} s…")
                 log.warning("Serveur injoignable (%s)", exc.__class__.__name__)
+                if once:
+                    raise
+                self.stop.wait(backoff)
+                backoff = min(backoff * 2, 120)
+            except Exception as exc:  # never let the background loop die silently
+                self.connected = False
+                self.status = self.error = f"Erreur inattendue ({exc.__class__.__name__}) : nouvel essai dans {backoff} s. Détails dans le journal."
+                log.exception("Erreur dans la boucle de l'agent")
                 if once:
                     raise
                 self.stop.wait(backoff)
@@ -792,6 +833,7 @@ def self_test(out: str, server: str = "") -> int:
     chk("sumatra", WindowsBackend._find_sumatra)
     chk("printers", lambda: ", ".join(p["name"] for p in WindowsBackend(None).printers()) or "aucune")
     chk("wia_scanner", lambda: len(list_scanner_caps()), required=False)
+    chk("window", lambda: __import__("printdrop_gui").__name__ and __import__("tkinter").TkVersion)  # Tk + interface present
     if server:
         def pairing() -> str:
             r = requests.post(f"{server.rstrip('/')}/api/agent/pair", timeout=30, json={"code": "XXXXXXXX", "name": "self-test", "hostname": "ci", "version": VERSION})
@@ -813,7 +855,8 @@ def make_backend(dry_run: bool, sumatra: str | None = None):
     return WindowsBackend(sumatra)
 
 
-def start_agent(dry_run: bool = False) -> Agent:
+def start_agent(dry_run: bool | None = None) -> Agent:
+    dry_run = bool(os.environ.get("PRINTDROP_DRY_RUN")) if dry_run is None else dry_run
     cfg = load_json(CONFIG_FILE, None)
     if not cfg:
         raise SystemExit("Poste non associé")
@@ -822,53 +865,9 @@ def start_agent(dry_run: bool = False) -> Agent:
     return agent
 
 
-def gui() -> None:
-    import tkinter as tk
-    from tkinter import messagebox
-    root = tk.Tk()
-    root.title(f"PrintDrop pour Windows — v{VERSION}")
-    root.geometry("460x300")
-    state = {"agent": None}
-    cfg = load_json(CONFIG_FILE, None)
-    title = tk.Label(root, font=("Segoe UI", 13, "bold"))
-    title.pack(pady=(16, 4))
-    status = tk.Label(root, fg="#334155", wraplength=420)
-    status.pack()
-    frm = tk.Frame(root)
-    server_var, code_var = tk.StringVar(value=DEFAULT_SERVER), tk.StringVar()
-
-    def do_pair():
-        try:
-            shop = pair(server_var.get(), code_var.get(), socket.gethostname())
-        except SystemExit as exc:
-            messagebox.showerror("PrintDrop", str(exc))
-            return
-        frm.pack_forget()
-        launch(shop)
-
-    def launch(shop: str):
-        title.config(text=f"Associé à « {shop} »")
-        state["agent"] = start_agent()
-        tick()
-
-    def tick():
-        if state["agent"]:
-            status.config(text=state["agent"].status)
-        root.after(2000, tick)
-
-    if cfg:
-        launch(cfg.get("shop", ""))
-    else:
-        title.config(text="Associer ce PC à votre boutique")
-        status.config(text="Dans PrintDrop : Imprimantes et périphériques → « Générer un code d'appairage »")
-        tk.Label(frm, text="Adresse PrintDrop").pack(anchor="w")
-        tk.Entry(frm, textvariable=server_var, width=48).pack()
-        tk.Label(frm, text="Code d'appairage (8 caractères)").pack(anchor="w", pady=(8, 0))
-        tk.Entry(frm, textvariable=code_var, width=20, font=("Consolas", 14)).pack(anchor="w")
-        tk.Button(frm, text="Associer", command=do_pair).pack(pady=12)
-        frm.pack(pady=8)
-    root.protocol("WM_DELETE_WINDOW", root.iconify)  # reste actif en arrière-plan
-    root.mainloop()
+def gui(background: bool = False) -> None:
+    from printdrop_gui import run_app  # modern window (Tk), shipped next to this file
+    run_app(background=background)
 
 
 def main() -> None:
@@ -881,14 +880,14 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", handlers=handlers)
     if len(sys.argv) == 1:
         return gui()
+    if sys.argv[1] == "--demo":  # window with the simulation backend (never prints): support / screenshots
+        os.environ["PRINTDROP_DRY_RUN"] = "1"
+        return gui()
     if sys.argv[1] == "--self-test":  # PrintDrop.exe --self-test report.json [server]
         raise SystemExit(self_test(sys.argv[2] if len(sys.argv) > 2 else str(DATA_DIR / "self-test.json"), sys.argv[3] if len(sys.argv) > 3 else ""))
     if sys.argv[1] == "--background":
-        if not load_json(CONFIG_FILE, None):
-            return gui()  # started with Windows but not paired yet: show the pairing window instead of exiting silently
-        start_agent()
-        while True:
-            time.sleep(3600)
+        # same app as the window, started hidden (window opens if not paired yet); a 2nd launch shows this window
+        return gui(background=True)
     ap = argparse.ArgumentParser(description="PrintDrop Agent")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p_pair = sub.add_parser("pair")

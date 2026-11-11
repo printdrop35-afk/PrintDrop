@@ -1,4 +1,8 @@
+fonts-dejavu=2.37-6
+imagemagick=8:6.9.11.60+dfsg-1.6+deb12u15
 libreoffice-writer-nogui=4:7.4.7-1+deb12u14
+libtk8.6=8.6.13-2
 msitools=0.101+repack-1
 nsis=3.08-3+deb12u1
 p7zip-full=16.02+really26.02+dfsg-0+deb12u1
+tk8.6-blt2.5=2.5.3+dfsg-4.1
