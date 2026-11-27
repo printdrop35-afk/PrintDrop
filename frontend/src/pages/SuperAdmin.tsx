@@ -16,8 +16,10 @@ import { endSession } from "@/lib/session";
 import { formatDateTime, formatEUR, tk } from "@/i18n";
 import { cn } from "@/lib/utils";
 import type { AdminOrgOut, AdminOrgUpdateIn, AdminStatsOut, AuditOut } from "@/lib/types";
+import { useNoIndex } from "@/lib/seo";
 
 export default function SuperAdmin() {
+  useNoIndex("/superadmin", "Super-admin — PrintDrop");
   const meQ = useMe();
   const qc = useQueryClient();
   const isAdmin = !meQ.isError && meQ.data?.platform_role === "superadmin";

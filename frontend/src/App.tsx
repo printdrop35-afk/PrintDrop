@@ -23,6 +23,7 @@ import LegalPage from "@/pages/site/Legal";
 import Counter from "@/pages/dashboard/Counter";
 import ScanDownload from "@/pages/ScanDownload";
 import Roadmap from "@/pages/site/Roadmap";
+import NotFound from "@/pages/NotFound";
 import { initAnalytics } from "@/lib/analytics";
 
 initAnalytics();
@@ -63,7 +64,7 @@ export default function App() {
         <Route path="/cgu" element={<LegalPage slug="cgu" />} />
         <Route path="/cookies" element={<LegalPage slug="cookies" />} />
         <Route path="/apercu/*" element={<PreviewRedirect />} />
-        <Route path="*" element={<LandingV2 />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
       <Toaster richColors />
     </>

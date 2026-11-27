@@ -11,6 +11,7 @@ import { beginSession } from "@/lib/session";
 import { queryClient } from "@/lib/queryClient";
 import { ME_KEY } from "@/hooks/useMe";
 import type { LoginIn, MeOut } from "@/lib/types";
+import { useNoIndex } from "@/lib/seo";
 
 export function landingPathFor(me: MeOut): string {
   if (me.platform_role === "superadmin" && !me.org) return "/superadmin";
@@ -18,6 +19,7 @@ export function landingPathFor(me: MeOut): string {
 }
 
 export default function Login() {
+  useNoIndex("/connexion", "Connexion — PrintDrop");
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

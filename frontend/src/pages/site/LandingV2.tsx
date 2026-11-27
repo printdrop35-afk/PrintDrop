@@ -16,6 +16,7 @@ import { track } from "@/lib/analytics";
 import { apiGet, apiPost, errorMessage } from "@/lib/api";
 import { formatEUR } from "@/i18n";
 import { cn } from "@/lib/utils";
+import { useSeo, softwareAppJsonLd, faqJsonLd, breadcrumbJsonLd } from "@/lib/seo";
 import type { ContactIn, ContactOut, PublicAgentVersionOut, PublicPlanOut } from "@/lib/types";
 
 const STEPS = [
@@ -68,6 +69,18 @@ export default function LandingV2() {
   const plans = useQuery({ queryKey: ["public-plans"], queryFn: () => apiGet<PublicPlanOut[]>("/public/plans") });
   const planList = plans.isError ? [] : plans.data ?? [];
 
+  useSeo({
+    title: "PrintDrop — Logiciel de gestion pour cybercafé et reprographie",
+    description:
+      "Logiciel de gestion pour cybercafé, reprographie et magasin de photocopie : vos clients envoient leurs documents par QR code depuis leur smartphone, prix calculé selon vos tarifs, gestion des commandes d'impression et de la file d'attente. Essai gratuit 14 jours.",
+    path: "/",
+    jsonLd: [
+      softwareAppJsonLd("/"),
+      faqJsonLd(FAQ.map((f) => ({ q: f.q, a: f.a }))),
+      breadcrumbJsonLd([{ name: "Accueil", path: "/" }]),
+    ],
+  });
+
   return (
     <div className="min-h-screen bg-background text-ink">
       <SiteHeader home />
@@ -81,7 +94,7 @@ export default function LandingV2() {
                 <Store className="size-3.5" /> Imprimeries · Reprographies · Cybercafés
               </p>
               <h1 className="mt-6 font-heading text-[2.6rem] leading-[1.05] font-bold text-ink sm:text-6xl" data-testid="hero-title">
-                Votre imprimerie.<br />Plus intelligente.<br />Plus rapide. <span className="text-azure">Digitale.</span>
+                Logiciel de gestion<br />pour cybercafé<br />et reprographie. <span className="text-azure">Plus rapide.</span>
               </h1>
               <p className="mt-6 max-w-xl text-lg leading-relaxed text-slate-600">
                 Permettez à vos clients d'envoyer leurs documents directement depuis leur smartphone. Simplifiez les commandes d'impression,
@@ -207,8 +220,8 @@ export default function LandingV2() {
                 <Smartphone className="size-4" /> Ouvrir la boutique de démonstration
               </Link>
             </div>
-            <img src="https://images.unsplash.com/photo-1600147131759-880e94a6185f?crop=entropy&cs=srgb&fm=jpg&w=1100&q=75" alt="Client scannant un QR code avec son smartphone"
-              loading="lazy" width={1100} height={733} className="aspect-[3/2] w-full rounded-2xl object-cover" />
+            <img src="https://images.unsplash.com/photo-1600147131759-880e94a6185f?crop=entropy&cs=srgb&fm=jpg&w=1100&q=75" alt="Client scannant un QR code avec son smartphone pour envoyer un document à imprimer"
+              loading="lazy" decoding="async" width={1100} height={733} className="aspect-[3/2] w-full rounded-2xl object-cover" />
           </div>
         </section>
 
