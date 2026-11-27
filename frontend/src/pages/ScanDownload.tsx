@@ -5,10 +5,12 @@ import { Logo } from "@/components/Logo";
 import { apiGet, errorMessage } from "@/lib/api";
 import { formatDateTime } from "@/i18n";
 import type { ScanPublicOut } from "@/lib/types";
+import { useNoIndex } from "@/lib/seo";
 
 /** Customer page behind the QR code / e-mail link: download the scanned document. No account, no code. */
 export default function ScanDownload() {
   const { token = "" } = useParams();
+  useNoIndex(`/scan/${token || "token"}`, "Téléchargement de scan — PrintDrop");
   const q = useQuery({ queryKey: ["scan", token], queryFn: () => apiGet<ScanPublicOut>(`/public/scans/${encodeURIComponent(token)}`), retry: false });
   const s = q.data;
   return (

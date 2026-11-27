@@ -14,6 +14,7 @@ import { reportConversion } from "@/lib/tracking";
 import { ME_KEY } from "@/hooks/useMe";
 import type { MeOut, RegisterIn } from "@/lib/types";
 import { track } from "@/lib/analytics";
+import { useNoIndex } from "@/lib/seo";
 
 const EMPTY: RegisterIn = { org_name: "", shop_name: "", city: "", owner_name: "", email: "", password: "" };
 
@@ -27,6 +28,7 @@ const FIELDS: { key: keyof RegisterIn; label: string; type?: string; auto?: stri
 ];
 
 export default function Register() {
+  useNoIndex("/inscription", "Inscription — PrintDrop");
   const navigate = useNavigate();
   const [form, setForm] = useState<RegisterIn>(EMPTY);
   const [error, setError] = useState("");
