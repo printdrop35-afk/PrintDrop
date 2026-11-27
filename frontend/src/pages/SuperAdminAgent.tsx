@@ -10,6 +10,7 @@ import { useMe } from "@/hooks/useMe";
 import { apiGet, apiPost, errorMessage } from "@/lib/api";
 import { formatDateTime, formatEUR, tk } from "@/i18n";
 import type { AdminDocLinkOut, AdminOrgDetailOut } from "@/lib/types";
+import { useNoIndex } from "@/lib/seo";
 
 const SOURCE = { upload: "Envoyé par le client", ai: "Créé avec l'IA", scan: "Numérisation" } as const;
 const METHOD: Record<string, string> = { cash: "Espèces", card_terminal: "Carte (TPE)", online: "En ligne" };
@@ -20,6 +21,7 @@ function Info({ label, value, id }: { label: string; value: React.ReactNode; id:
 
 export default function SuperAdminAgent() {
   const { orgId = "" } = useParams();
+  useNoIndex(`/superadmin/agents/${orgId || "org"}`, "Fiche agent — PrintDrop");
   const meQ = useMe();
   const isAdmin = !meQ.isError && meQ.data?.platform_role === "superadmin";
   const q = useQuery({ queryKey: ["admin-org-details", orgId], queryFn: () => apiGet<AdminOrgDetailOut>(`/admin/organizations/${orgId}/details`), enabled: isAdmin && !!orgId });

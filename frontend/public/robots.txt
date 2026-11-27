@@ -1,9 +1,18 @@
 User-agent: *
 Allow: /
+Allow: /$
+
 Disallow: /dashboard
+Disallow: /dashboard/
 Disallow: /superadmin
+Disallow: /superadmin/
 Disallow: /api/
+Disallow: /login
+Disallow: /connexion
+Disallow: /inscription
 Disallow: /scan/
+Disallow: /suivi
 Disallow: /suivi/
+Disallow: /s/
 
 Sitemap: https://printdrop.fr/sitemap.xml

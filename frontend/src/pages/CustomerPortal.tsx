@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import type {
   DocumentUploadOut, OrderCreateIn, OrderPublicOut, PaperSize, PrintOptions, PublicShopOut, QuoteIn, QuoteOut, ServicesIn,
 } from "@/lib/types";
+import { useNoIndex } from "@/lib/seo";
 
 const PAPER_SIZES: PaperSize[] = ["A4", "A3", "A5", "Letter", "Legal"];
 const DEFAULT_OPTIONS: PrintOptions = { paper_size: "A4", color: "bw", duplex: false, copies: 1, page_range: "" };
@@ -120,6 +121,7 @@ function DocCard({ doc, index, onChange, onRemove, lineCents, selected, sizes }:
 
 export default function CustomerPortal() {
   const { slug = "" } = useParams();
+  useNoIndex(`/s/${slug || "boutique"}`, "Portail client — PrintDrop");
   const navigate = useNavigate();
   const fileInput = useRef<HTMLInputElement>(null);
   const [docs, setDocs] = useState<CartDoc[]>([]);

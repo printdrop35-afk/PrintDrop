@@ -3,6 +3,7 @@ import { Navigate, useParams } from "react-router-dom";
 import { TriangleAlert } from "lucide-react";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { COMPANY, COMPANY_PENDING, LEGAL_LINKS, formatSiren, type LegalSlug } from "@/lib/brand";
+import { useSeo } from "@/lib/seo";
 
 /** Placeholder for legally required information not supplied by the owner — never invented. */
 function Todo({ children }: { children: ReactNode }) {
@@ -103,6 +104,25 @@ export default function LegalPage({ slug: forced }: { slug?: LegalSlug }) {
   const meta = LEGAL_LINKS.find((l) => l.slug === slug);
   if (!meta) return <Navigate to="/" replace />;
   const Body = DOCS[slug];
+  const seoBySlug: Record<LegalSlug, { title: string; description: string }> = {
+    "mentions-legales": {
+      title: "Mentions légales — PrintDrop",
+      description: "Mentions légales du logiciel PrintDrop : éditeur, siège social, immatriculation et informations sur la propriété intellectuelle.",
+    },
+    confidentialite: {
+      title: "Politique de confidentialité — PrintDrop",
+      description: "Politique de confidentialité de PrintDrop : données traitées, finalités, durées de conservation et droits RGPD.",
+    },
+    cgu: {
+      title: "Conditions Générales d'Utilisation — PrintDrop",
+      description: "CGU de PrintDrop, logiciel de gestion des commandes d'impression : essai, abonnement, responsabilités et conditions d'usage.",
+    },
+    cookies: {
+      title: "Gestion des cookies — PrintDrop",
+      description: "Information sur les cookies utilisés par PrintDrop : aucun cookie publicitaire ni de mesure d'audience.",
+    },
+  };
+  useSeo({ ...seoBySlug[slug], path: `/${slug}`, robots: "index,follow" });
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />

@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import type { MessageKey } from "@/i18n/fr";
 import type { DashboardCtx } from "@/hooks/useDashboard";
 import type { MeOut } from "@/lib/types";
+import { useNoIndex } from "@/lib/seo";
 
 const NAV: { to: string; key: MessageKey; icon: typeof ClipboardList; perm: string; testId: string }[] = [
   { to: "/dashboard", key: "nav.orders", icon: ClipboardList, perm: "orders:read", testId: "nav-orders" },
@@ -71,6 +72,7 @@ function SidebarBody({ me, shopId, setShopId, onNavigate }: { me: MeOut; shopId:
 }
 
 export default function DashboardLayout() {
+  useNoIndex("/dashboard", "Tableau de bord — PrintDrop");
   const meQ = useMe();
   const [shopIdState, setShopIdState] = useState(() => localStorage.getItem(SHOP_KEY) ?? "");
   const [mobileOpen, setMobileOpen] = useState(false);

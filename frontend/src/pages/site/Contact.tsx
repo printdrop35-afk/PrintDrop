@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { apiPost, errorMessage } from "@/lib/api";
 import { COMPANY } from "@/lib/brand";
+import { useSeo, breadcrumbJsonLd } from "@/lib/seo";
 import type { ContactIn, ContactOut } from "@/lib/types";
 
 export function ContactForm({ defaultDemo = false }: { defaultDemo?: boolean }) {
@@ -54,6 +55,14 @@ export function ContactForm({ defaultDemo = false }: { defaultDemo?: boolean }) 
 export default function Contact() {
   const [params] = useSearchParams();
   const demo = params.get("sujet") === "demo";
+  useSeo({
+    title: demo ? "Réserver une démo PrintDrop — Contact" : "Contact PrintDrop — Logiciel de gestion pour reprographie",
+    description: demo
+      ? "Réservez une démonstration de 15 min de PrintDrop, le logiciel de gestion des commandes d'impression pour cybercafé, reprographie et magasin de photocopie."
+      : "Une question sur PrintDrop, votre abonnement ou l'installation du logiciel de gestion d'impression ? Écrivez-nous via le formulaire de contact.",
+    path: "/contact",
+    jsonLd: breadcrumbJsonLd([{ name: "Accueil", path: "/" }, { name: "Contact", path: "/contact" }]),
+  });
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />

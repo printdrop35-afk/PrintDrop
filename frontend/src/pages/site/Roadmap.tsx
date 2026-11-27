@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { CheckCircle2, Clock } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
+import { useSeo, breadcrumbJsonLd } from "@/lib/seo";
 import { cn } from "@/lib/utils";
 
 type Item = { label: string; status: "Disponible" | "À venir"; note?: string };
@@ -24,6 +25,12 @@ const ITEMS: Item[] = [
 ];
 
 export default function Roadmap() {
+  useSeo({
+    title: "Feuille de route PrintDrop — Avancement du logiciel d'impression",
+    description: "Transparence sur l'avancement du logiciel PrintDrop : QR code, gestion des commandes d'impression, agent Windows, paiement en ligne et fonctionnalités à venir.",
+    path: "/roadmap",
+    jsonLd: breadcrumbJsonLd([{ name: "Accueil", path: "/" }, { name: "Feuille de route", path: "/roadmap" }]),
+  });
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />

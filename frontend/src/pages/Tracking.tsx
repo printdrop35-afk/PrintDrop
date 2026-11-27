@@ -13,11 +13,13 @@ import { apiPost, errorMessage } from "@/lib/api";
 import { formatDateTime, formatEUR, tk } from "@/i18n";
 import { cn } from "@/lib/utils";
 import type { OrderPublicOut, OrderStatus, TrackIn } from "@/lib/types";
+import { useNoIndex } from "@/lib/seo";
 
 const STEPS: OrderStatus[] = ["pending", "printing", "ready", "picked_up"];
 
 export default function Tracking() {
   const { code: codeParam = "" } = useParams();
+  useNoIndex("/suivi", "Suivi de commande — PrintDrop");
   const navigate = useNavigate();
   const [code, setCode] = useState(codeParam);
   const [phone, setPhone] = useState(() => (codeParam ? sessionStorage.getItem(`pd_track_${codeParam}`) ?? "" : ""));
